@@ -1,0 +1,33 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <title>Bing Rewards routine</title>
+    <link rel="stylesheet" href="confirm.css" />
+    <!-- Deliberately not deferred, for the same reason popup-boot.js isn't:
+         the palette has to be on the root before the first paint or the
+         window flashes the default theme. External file rather than inline
+         because MV3's CSP blocks inline scripts; confirm.js reconciles with
+         settings.theme once storage answers. -->
+    <script src="confirm-boot.js"></script>
+  </head>
+  <body>
+    <main class="dialog">
+      <div class="head">
+        <span class="glyph" aria-hidden="true">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M13 2 4.1 13.3a.7.7 0 0 0 .5 1.1H11l-1 8 8.9-11.3a.7.7 0 0 0-.5-1.1H12z" />
+          </svg>
+        </span>
+        <h1>Bing Rewards routine</h1>
+      </div>
+      <p class="message">Starting the daily routine…</p>
+      <p class="countdown" id="countdown" role="timer">Starts in 15s</p>
+      <div class="actions">
+        <button type="button" class="btn btn-primary" id="startBtn">Start now</button>
+        <button type="button" class="btn" id="cancelBtn">Cancel</button>
+      </div>
+    </main>
+    <script src="confirm.js"></script>
+  </body>
+</html>

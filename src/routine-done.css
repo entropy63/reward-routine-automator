@@ -1,0 +1,453 @@
+/* Bing Search Automator — the routine-done summary page
+ *
+ * A companion to popup.css, not a customer of it, for the same reason
+ * confirm.css is: linking popup.css would drag its popup-only layout rules
+ * (the 360px body, the clamped height) into a full tab they were never sized
+ * for. So the token layer below is the same definitions popup.css uses,
+ * copied — keep the two in step when a palette changes. data-theme on <html>
+ * picks the palette (geist | primer | catppuccin, default geist); light-dark()
+ * pairs make light/dark follow the OS by default, and html[data-mode] pins an
+ * explicit Appearance choice (the popup's second theme axis). Both attributes
+ * come from routine-done-boot.js pre-paint and routine-done.js once storage
+ * answers.
+ *
+ * The one thing this page adds over the dialog is the moving background:
+ * three outlined rings (`.orbit`) rotating very slowly behind the card —
+ * palette colors only, opacity well under the ink, and fully frozen by
+ * prefers-reduced-motion. That restraint is the design: motion this slow
+ * reads as "alive", not as decoration begging for attention.
+ */
+
+:root {
+  --font-ui: "Segoe UI Variable Text", "Segoe UI", system-ui, ui-sans-serif,
+    -apple-system, sans-serif;
+  --font-mono: ui-monospace, "Cascadia Mono", "SF Mono", Consolas, monospace;
+
+  /* Geist — light-dark() pairs, same values as popup.css. */
+  --surface-app: light-dark(#ffffff, #0a0a0a);
+  --surface-card: light-dark(#ffffff, #111111);
+  --surface-sunken: light-dark(#fafafa, #171717);
+  --surface-hover: light-dark(#fafafa, #1a1a1a);
+  --line: light-dark(#eaeaea, #262626);
+  --line-strong: light-dark(#d4d4d4, #333333);
+  --ink: light-dark(#171717, #ededed);
+  --ink-muted: light-dark(#666666, #a1a1a1);
+  --ink-faint: light-dark(#999999, #666666);
+
+  --brand: light-dark(#0070f3, #3291ff);
+  --brand-hover: light-dark(#0061d5, #4c9dff);
+  --brand-ink: light-dark(#ffffff, #0a0a0a);
+  --brand-tint: light-dark(#eaf3fe, #101e2f);
+  --danger: light-dark(#e5484d, #ff4d4d);
+  --danger-tint: light-dark(#fdecec, #2a0f0f);
+  --ok: light-dark(#0f8a4d, #0abf53);
+
+  --r-sm: 5px;
+  --r-md: 6px;
+  --r-lg: 8px;
+  --r-xl: 14px;
+
+  /* Open Props easings (MIT) — only the handful actually used here. */
+  --ease-3: cubic-bezier(0.25, 0, 0.3, 1);
+
+  --dur-1: 120ms;
+
+  /* light dark = follow the OS ("auto" in the Appearance picker); the
+     html[data-mode] rules below pin an explicit choice. Same as popup.css. */
+  color-scheme: light dark;
+}
+
+/* The Appearance picker: an explicit choice overrides the OS for this page.
+   No attribute (auto) leaves color-scheme at the :root default above. */
+html[data-mode="light"] {
+  color-scheme: light;
+}
+
+html[data-mode="dark"] {
+  color-scheme: dark;
+}
+
+/* Primer (GitHub) */
+[data-theme="primer"] {
+  --surface-app: light-dark(#ffffff, #0d1117);
+  --surface-card: light-dark(#ffffff, #151b23);
+  --surface-sunken: light-dark(#f6f8fa, #0d1117);
+  --surface-hover: light-dark(#eff2f5, #212830);
+  --line: light-dark(#d1d9e0, #3d444d);
+  --line-strong: light-dark(#818b98, #656c76);
+  --ink: light-dark(#1f2328, #f0f6fc);
+  --ink-muted: light-dark(#59636e, #9198a1);
+  --ink-faint: light-dark(#818b98, #656c76);
+
+  --brand: light-dark(#0969da, #1f6feb);
+  --brand-hover: light-dark(#0550ae, #388bfd);
+  --brand-ink: #ffffff;
+  --brand-tint: light-dark(#ddf4ff, #121d2f);
+  --danger: light-dark(#cf222e, #ff7b72);
+  --danger-tint: light-dark(#ffebe9, #25171c);
+  --ok: light-dark(#1a7f37, #3fb950);
+
+  --r-sm: 6px;
+  --r-md: 6px;
+  --r-lg: 8px;
+  --r-xl: 12px;
+}
+
+/* Catppuccin (Latte / Mocha) */
+[data-theme="catppuccin"] {
+  --surface-app: light-dark(#e6e9ef, #181825);
+  --surface-card: light-dark(#eff1f5, #1e1e2e);
+  --surface-sunken: light-dark(#dce0e8, #11111b);
+  --surface-hover: light-dark(#dce0e8, #262640);
+  --line: light-dark(#ccd0da, #313244);
+  --line-strong: light-dark(#bcc0cc, #45475a);
+  --ink: light-dark(#4c4f69, #cdd6f4);
+  --ink-muted: light-dark(#6c6f85, #a6adc8);
+  --ink-faint: light-dark(#7c7f93, #7f849c);
+
+  --brand: light-dark(#1e66f5, #89b4fa);
+  --brand-hover: light-dark(#1a5ad8, #9cbdfb);
+  --brand-ink: light-dark(#eff1f5, #11111b);
+  --brand-tint: light-dark(#dae3f5, #2b3047);
+  --danger: light-dark(#d20f39, #f38ba8);
+  --danger-tint: light-dark(#ecdae2, #382b3c);
+  --ok: light-dark(#40a02b, #a6e3a1);
+
+  --r-sm: 8px;
+  --r-md: 10px;
+  --r-lg: 14px;
+  --r-xl: 18px;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  background: var(--surface-app);
+  color: var(--ink);
+  font: 400 14px/1.5 var(--font-ui);
+  -webkit-font-smoothing: antialiased;
+  overflow: hidden; /* the orbit field is fixed; it never scrolls */
+}
+
+/* ---------- the moving background ----------
+ *
+ * Three concentric outlined rings, centered behind the card, rotating on
+ * staggered multi-minute periods. It is one keyframe per layer — no glow, no
+ * blur, no gradient fill; the rings are just border-color + the line color
+ * the palette already defines, and they live at an opacity far under the
+ * card's ink. Slow enough that it reads as texture, not animation. */
+
+.orbit {
+  position: fixed;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  pointer-events: none;
+}
+
+.orbit-ring {
+  position: absolute;
+  border-radius: 50%;
+  border: 1px solid var(--line-strong);
+}
+
+.orbit-ring:nth-child(1) {
+  width: 55vmin;
+  height: 55vmin;
+  opacity: 0.5;
+  animation: orbit-spin 240s linear infinite;
+  animation-direction: reverse;
+}
+
+.orbit-ring:nth-child(2) {
+  width: 75vmin;
+  height: 75vmin;
+  border-style: dashed;
+  opacity: 0.3;
+  animation: orbit-spin 360s linear infinite;
+}
+
+.orbit-ring:nth-child(3) {
+  width: 100vmin;
+  height: 100vmin;
+  opacity: 0.18;
+  animation: orbit-spin 480s linear infinite;
+  animation-direction: reverse;
+}
+
+/* A ring is a perfect circle, so a plain rotate is invisible — the dashes on
+ * the middle ring are what make the rotation legible, and the slight tilt on
+ * the others lets their borders catch the eye as they pass the corners. */
+@keyframes orbit-spin {
+  from {
+    transform: rotate(0deg) skewX(-4deg);
+  }
+  to {
+    transform: rotate(360deg) skewX(-4deg);
+  }
+}
+
+/* The dialog's rule shape, hardened: an !important override, because the
+ * rings' own animation declarations sit further down the cascade than a
+ * plain specificity-safe reset would reliably beat (popup.css learned the
+ * same lesson). A decoration with no informational content is the first
+ * thing reduced motion should take away. */
+@media (prefers-reduced-motion: reduce) {
+  .orbit-ring {
+    animation: none !important;
+  }
+}
+
+/* ---------- the developer preview bar ---------- */
+
+/* Only present when the popup's Developer-Option opener passed ?dev=1 — the
+   real endRoutine call never does. Sits above the card, styled like a muted
+   toolbar rather than part of the card, so it never reads as page content.
+   The [hidden] rule is load-bearing: the display:flex above would otherwise
+   beat the UA's [hidden] { display: none }. */
+.dev-bar {
+  position: fixed;
+  top: 12px;
+  left: 50%;
+  transform: translateX(-50%);
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 10px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: var(--surface-card);
+  box-shadow: 0 1px 2px rgb(0 0 0 / 0.04);
+  font: 500 11px/1 var(--font-ui);
+}
+
+.dev-bar[hidden] {
+  display: none;
+}
+
+.dev-label {
+  color: var(--ink-faint);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+}
+
+/* Small ghost buttons — the pill shape the page already uses, one step
+   quieter than the card's own actions. */
+.dev-btn {
+  padding: 5px 10px;
+  border: 1px solid transparent;
+  border-radius: 999px;
+  background: none;
+  color: var(--ink-muted);
+  font: inherit;
+  cursor: pointer;
+  transition: background var(--dur-1) var(--ease-3),
+    color var(--dur-1) var(--ease-3);
+}
+
+.dev-btn:hover {
+  background: var(--surface-hover);
+  color: var(--ink);
+}
+
+.dev-btn:focus-visible {
+  outline: 2px solid var(--brand);
+  outline-offset: 2px;
+}
+
+/* ---------- the card ---------- */
+
+/* A full tab, not a sized window like the confirm dialog: the page centers
+   its card in it and caps the card's width, so the same markup reads fine
+   from a small window to a maximized one. */
+.page {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 100vh;
+  padding: 24px;
+}
+
+.card {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  width: min(520px, 100%);
+  padding: 24px 26px;
+  border: 1px solid var(--line);
+  border-radius: var(--r-xl);
+  background: var(--surface-card);
+  box-shadow: 0 1px 2px rgb(0 0 0 / 0.04), 0 8px 24px rgb(0 0 0 / 0.05);
+}
+
+.head {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+/* The popup's identity glyph box, as in confirm.css — with one modern touch:
+   the check sits in a filled brand circle, which says "done" before any text
+   is read. */
+.glyph {
+  display: grid;
+  place-items: center;
+  width: 32px;
+  height: 32px;
+  flex: none;
+  border-radius: 999px;
+  background: var(--brand);
+  color: var(--brand-ink);
+}
+
+.glyph svg {
+  width: 16px;
+  height: 16px;
+}
+
+h1 {
+  margin: 0;
+  font-size: 16px;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+}
+
+.stamp {
+  margin-left: auto;
+  color: var(--ink-faint);
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+}
+
+.lead {
+  margin: 0;
+  color: var(--ink-muted);
+}
+
+/* The streaks the user has to finish themselves. Each row: name, the value's
+   own progress pair, and the fix hint. */
+.streaks {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.streak {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  padding: 11px 14px;
+  border: 1px solid var(--line);
+  border-radius: var(--r-lg);
+  background: var(--surface-sunken);
+}
+
+.streak-name {
+  font-weight: 600;
+}
+
+.streak-value {
+  color: var(--ink-muted);
+  font-variant-numeric: tabular-nums;
+}
+
+/* The "you have to do this one" line — red, like the popup's banner for the
+   same condition. */
+.streak-hint {
+  flex: none;
+  margin-left: auto;
+  color: var(--danger);
+  font-size: 12px;
+}
+
+/* The steps the routine skipped as already done (2026-09-05): the visual
+   opposite of the streak rows above — dimmed, no border, no hint. These are
+   the things that went RIGHT today; they must read as a footnote, not a
+   to-do. */
+.skips-note {
+  margin: 14px 0 0;
+  color: var(--ink-faint);
+  font-size: 12px;
+}
+
+.skips {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin: 6px 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.skip {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  color: var(--ink-faint);
+  font-size: 12px;
+}
+
+.skip-name {
+  font-weight: 600;
+}
+
+.skip-reason {
+  font-variant-numeric: tabular-nums;
+}
+
+.actions {
+  display: flex;
+  gap: 8px;
+  margin-top: 2px;
+}
+
+/* The popup's buttons, minus the pointer-tracking highlight (no --px/--py
+   feed here — the plain hover states carry it). */
+.btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  flex: none;
+  padding: 8px 16px;
+  border: 1px solid var(--line-strong);
+  border-radius: 999px;
+  background: var(--surface-card);
+  color: var(--ink);
+  font: 500 12px/1.2 var(--font-ui);
+  cursor: pointer;
+  transition: background var(--dur-1) var(--ease-3),
+    border-color var(--dur-1) var(--ease-3), color var(--dur-1) var(--ease-3),
+    transform var(--dur-1) var(--ease-3);
+}
+
+.btn:hover:not(:disabled) {
+  background: var(--surface-hover);
+}
+
+.btn:active:not(:disabled) {
+  transform: scale(0.975);
+}
+
+.btn:focus-visible {
+  outline: 2px solid var(--brand);
+  outline-offset: 2px;
+}
+
+.btn-primary {
+  border-color: var(--brand);
+  background: var(--brand);
+  color: var(--brand-ink);
+}
+
+.btn-primary:hover:not(:disabled) {
+  background: var(--brand-hover);
+  border-color: var(--brand-hover);
+}

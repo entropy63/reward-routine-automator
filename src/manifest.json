@@ -1,0 +1,40 @@
+{
+  "manifest_version": 3,
+  "name": "Reward Routine Automator",
+  "version": "2.1.15",
+  "description": "Automatically perform Bing searches with realistic typing and dynamic intervals, and open daily sets on the Rewards dashboard.",
+  "permissions": [
+    "tabs",
+    "storage",
+    "scripting",
+    "alarms"
+  ],
+  "host_permissions": [
+    "https://*.bing.com/*",
+    "https://uselessfacts.jsph.pl/*",
+    "https://picsum.photos/*",
+    "https://*.picsum.photos/*",
+    "https://*.thecatapi.com/*",
+    "https://trends.google.com/*",
+    "https://en.wikipedia.org/*"
+  ],
+  "background": {
+    "service_worker": "background.js"
+  },
+  "icons": {
+    "16": "icons/icon16.png",
+    "32": "icons/icon32.png",
+    "48": "icons/icon48.png",
+    "128": "icons/icon128.png"
+  },
+  "action": {
+    "default_popup": "popup.html",
+    "default_title": "Reward Routine Automator",
+    "default_icon": {
+      "16": "icons/icon16.png",
+      "32": "icons/icon32.png",
+      "48": "icons/icon48.png",
+      "128": "icons/icon128.png"
+    }
+  }
+}

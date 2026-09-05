@@ -1,0 +1,23 @@
+# The repository carries only the extension source — everything else in the
+# working tree stays local (development docs, tests, live-page captures,
+# node_modules, build archives, browser profiles).
+
+# --- development / tooling ---
+node_modules/
+test-results/
+.playwright-mcp/
+.playwright-report/
+
+# --- live Bing page captures (contain real account data) ---
+*.html
+!src/*.html
+*.htm
+
+# --- archives and old snapshots ---
+*.zip
+*.7z
+
+# --- local scratch ---
+models.md
+tasks/
+.claude/
