@@ -28,3 +28,8 @@ playwright.config.js
 models.md
 tasks/
 .claude/
+
+# --- the src2 rebuild is extension source too: its tests and ESM marker
+# ship with it (the "tests/"/"package.json" rules above match at any depth,
+# so re-include the whole tree) ---
+!src2/**
