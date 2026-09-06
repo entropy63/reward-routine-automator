@@ -1,0 +1,65 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <title>Routine done</title>
+    <link rel="stylesheet" href="routine-done.css" />
+    <!-- Deliberately not deferred, for the same reason confirm-boot.js isn't:
+         the palette has to be on the root before the first paint or the page
+         flashes the default theme. External file rather than inline because
+         MV3's CSP blocks inline scripts; routine-done.js reconciles with
+         settings.theme once storage answers. -->
+    <script src="routine-done-boot.js"></script>
+  </head>
+  <body>
+    <!-- The moving background: one slowly rotating ring field behind the
+         card, palette-colored and frozen entirely by prefers-reduced-motion
+         (the CSS owns that rule). Pure decoration — aria-hidden, and its
+         opacity sits far under the ink so the card is always the read. -->
+    <div class="orbit" aria-hidden="true">
+      <span class="orbit-ring"></span>
+      <span class="orbit-ring"></span>
+      <span class="orbit-ring"></span>
+    </div>
+
+    <main class="page">
+      <!-- Developer Option only (2026-09-04): shown when the popup's dev
+           opener passes ?dev=1 — endRoutine never does, so the page a real
+           routine opens stays honest. The buttons live in here, one per
+           render condition, built by routine-done.js. -->
+      <div class="dev-bar" id="devBar" hidden>
+        <span class="dev-label">Preview</span>
+      </div>
+      <div class="card">
+        <div class="head">
+          <span class="glyph" aria-hidden="true">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M20 6 9 17l-5-5" />
+            </svg>
+          </span>
+          <h1>Routine done</h1>
+          <span class="stamp" id="stamp"></span>
+        </div>
+
+        <!-- Filled in by routine-done.js from the ?q= summary query the
+             background appends. The empty state (no query) reads as a plain
+             "done" — the page must still be readable if the background's
+             argument got lost. -->
+        <p class="lead" id="lead">The daily routine finished.</p>
+        <ul class="streaks" id="streaks" hidden></ul>
+
+        <!-- The steps the routine skipped as already done (skip-when-done),
+             filled from the ?s= query: each row names the step and the
+             verdict that skipped it. Hidden when nothing was skipped — the
+             routine earned the right to stay quiet about it. -->
+        <p class="skips-note" id="skipsNote" hidden>Skipped — already done today:</p>
+        <ul class="skips" id="skips" hidden></ul>
+
+        <div class="actions">
+          <button type="button" class="btn btn-primary" id="closeBtn">Close</button>
+        </div>
+      </div>
+    </main>
+    <script src="routine-done.js"></script>
+  </body>
+</html>
