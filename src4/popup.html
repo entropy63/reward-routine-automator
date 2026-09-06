@@ -1,0 +1,1467 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <title>the meow</title>
+    <link rel="stylesheet" href="popup.css" />
+    <!-- Deliberately not deferred: it sizes the window before the first paint. -->
+    <script src="popup-boot.js"></script>
+  </head>
+  <body>
+    <!-- Icons: Lucide (MIT) — zap, calendar-check, gift, search, image, square,
+         chevron-down, layers-2, grip-vertical, circle-dollar-sign, x, eye, gear -->
+
+    <!-- Two drifting gradient blooms over a slow-panning dot grid. Fixed, so it
+         stays put while the content scrolls over it. -->
+    <div class="backdrop" aria-hidden="true">
+      <span class="bloom bloom-a"></span>
+      <span class="bloom bloom-b"></span>
+      <span class="grid"></span>
+    </div>
+
+    <header class="topbar">
+      <!-- Identity is just the glyph (2026-09-05, user request: the
+           extension's name in the bar "is not necessary"). The full name
+           still lives in the <title>, the manifest's default_title and the
+           browser's own extension UI. -->
+      <div class="identity">
+        <span class="glyph" aria-hidden="true">
+          <!-- The same paw print the toolbar icon carries (white on rose
+               there, ink here) — the fourth build's mark. -->
+          <svg viewBox="0 0 24 24" fill="currentColor" stroke="none">
+            <ellipse cx="12" cy="15.2" rx="4.6" ry="3.7" />
+            <ellipse cx="5.6" cy="10.6" rx="1.9" ry="2.5" />
+            <ellipse cx="9.5" cy="7.4" rx="1.9" ry="2.6" />
+            <ellipse cx="14.5" cy="7.4" rx="1.9" ry="2.6" />
+            <ellipse cx="18.4" cy="10.6" rx="1.9" ry="2.5" />
+          </svg>
+        </span>
+      </div>
+      <div class="topbar-tools">
+        <!-- Developer Option only (2026-09-03): previews every banner the
+             extension can raise at the top — a restocked amount, a sold-out
+             one, the stalled Bing-app day — with sample payloads, so the
+             notification wording and styling can be checked without waiting
+             for the real thing. CSS-gated like the Activity card. -->
+        <button
+          type="button"
+          class="topbar-btn"
+          id="testNotificationsBtn"
+          title="Preview every notification banner"
+          aria-label="Preview every notification banner"
+        >
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <path d="M6 8a6 6 0 0 1 12 0c0 7 3 9 3 9H3s3-2 3-9" />
+            <path d="M10.3 21a1.94 1.94 0 0 0 3.4 0" />
+          </svg>
+        </button>
+        <!-- Developer Option only (2026-09-04): opens the routine-done
+             summary page — the page the routine itself opens at endRoutine —
+             so its layout, wording and motion can be checked without running
+             a whole routine. CSS-gated like the bell beside it. -->
+        <button
+          type="button"
+          class="topbar-btn"
+          id="openRoutineDoneBtn"
+          title="Open the routine-done page"
+          aria-label="Open the routine-done page"
+        >
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <path d="M20 6 9 17l-5-5" />
+          </svg>
+        </button>
+        <!-- Developer Option only (2026-09-05): clears the routine's
+             once-per-day done-mark, so the next browser start runs the
+             startup routine again — as if it had never run today. The launch
+             itself still walks its own gates (Run on startup, the confirm
+             dialog). CSS-gated like the bell beside it. -->
+        <button
+          type="button"
+          class="topbar-btn"
+          id="resetRoutineDayBtn"
+          title="Run the routine again on the next browser start"
+          aria-label="Run the routine again on the next browser start"
+        >
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8" />
+            <path d="M3 3v5h5" />
+          </svg>
+        </button>
+        <!-- Opens the Settings view: the startup plan, the tabs and the
+             former Advanced panel live there, out of the way of the tabbed
+             main views. -->
+        <button
+          type="button"
+          class="topbar-btn"
+          id="settingsBtn"
+          aria-pressed="false"
+          title="Open the settings"
+          aria-label="Settings"
+        >
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z" />
+            <circle cx="12" cy="12" r="3" />
+          </svg>
+        </button>
+        <span class="status" id="statusPill" data-state="idle">
+          <span class="status-dot" aria-hidden="true"></span>
+          <span id="statusText" role="status">Idle</span>
+        </span>
+      </div>
+    </header>
+
+    <main id="mainView">
+      <!-- The Bing-app warning: that activity only counts from the real
+           phone app, so an untouched 0/N after a stats read is the one
+           thing the routine genuinely cannot finish for the user. renderStats
+           toggles it; it is not a card, so the layout editor never sees it. -->
+      <div class="banner" id="bingAppBanner" hidden>
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+          <path d="m21.73 18-8-14a2 2 0 0 0-3.46 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3Z" />
+          <path d="M12 9v4" />
+          <path d="M12 17h.01" />
+        </svg>
+        <span id="bingAppBannerText"></span>
+      </div>
+
+      <!-- Stock-change news from the redeem watch (2026-09-03): two separate
+           banners, one per direction — a restocked amount (green) and a newly
+           sold-out one (orange). NOT dismissible (user's call): they show
+           while the page's state says so and clear only when it flips back.
+           The Bing-app banner above is the third type (danger red). -->
+      <div class="banner banner-good" id="redeemRestockBanner" hidden>
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+          <circle cx="12" cy="12" r="9" />
+          <path d="m8.5 12 2.5 2.5 5-5" />
+        </svg>
+        <span id="redeemRestockBannerText"></span>
+      </div>
+      <div class="banner banner-warn" id="redeemSoldOutBanner" hidden>
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+          <circle cx="12" cy="12" r="9" />
+          <path d="M12 7v5l3 2" />
+        </svg>
+        <span id="redeemSoldOutBannerText"></span>
+      </div>
+
+      <!-- The fourth build's redesign (ADR-020): the scrolling card stack is
+           an app shell — four tabbed views (Today / Run / Redeem / Activity)
+           with a bottom tab bar, each view scrolling inside the fixed-height
+           window. The tab bar's order and visibility live in the Settings
+           view's Tabs card (settings.sectionOrder + hiddenSections). -->
+
+      <!-- THE TODAY VIEW: the day at a glance. The progress ring carries the
+           search-points pair ("40/60"); the hero beside it is the balance —
+           the one number the popup is opened for — with today's earned delta
+           under it. Below: quick stats, the redeem goal, the 7-day sparkline
+           (from the points history the stats read now records), streak chips
+           and the plan preview. Element ids keep their stats-era names
+           (statAvailablePoints etc.) so renderStats is unchanged. -->
+      <section class="card view" id="todayCard" data-view="today" style="--i: 1">
+        <div class="card-head">
+          <h2>Today</h2>
+          <button
+            type="button"
+            class="btn btn-quiet btn-stats-refresh"
+            id="refreshStatsBtn"
+            title="Read the Rewards dashboard and redeem catalog again"
+          >
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true">
+              <path d="M21 12a9 9 0 1 1-2.64-6.36" />
+              <path d="M21 3v6h-6" />
+            </svg>
+            Refresh
+          </button>
+        </div>
+        <!-- Ring + hero: the search-points cap as a ring fill on the left,
+             the balance big on the right, with today's earned delta under
+             it. The ring shows "—" until a today-fresh read exists (a stale
+             read has no pair worth filling). -->
+        <div class="today-hero">
+          <div class="today-ring" id="todayRing" role="img" aria-label="Search points progress">
+            <svg viewBox="0 0 84 84" aria-hidden="true">
+              <circle class="ring-track" cx="42" cy="42" r="36" />
+              <circle class="ring-fill" id="ringFill" cx="42" cy="42" r="36" />
+            </svg>
+            <span class="ring-center">
+              <span class="ring-value" id="statSearchPoints">—</span>
+              <span class="ring-label">search pts</span>
+            </span>
+          </div>
+          <div class="today-hero-stats">
+            <span class="today-hero-label">Available points</span>
+            <span class="today-hero-value" id="statAvailablePoints">—</span>
+            <span class="today-earned" id="earnedToday"></span>
+          </div>
+        </div>
+        <dl class="stats-grid today-grid">
+          <div class="stat">
+            <dt>Ready to claim</dt>
+            <dd id="statReadyToClaim" class="is-empty">—</dd>
+          </div>
+          <div class="stat">
+            <dt>Daily streak</dt>
+            <dd id="statDailyStreak" class="is-empty">—</dd>
+          </div>
+          <div class="stat">
+            <dt>Stamp bonus</dt>
+            <dd id="statStampBonus" class="is-empty">—</dd>
+          </div>
+        </dl>
+        <!-- The redeem goal (ADR-020): progress toward a points target, with
+             a "~N days at your pace" estimate off the history's trend. The
+             empty state points to the Edit button — or the Redeem view's
+             "Set as goal", which fills the chosen coin amount's price. -->
+        <div class="goal-block" id="goalBlock">
+          <div class="goal-head">
+            <p class="group-label">Goal</p>
+            <button
+              type="button"
+              class="btn btn-quiet btn-compact"
+              id="goalEditBtn"
+              title="Set the goal's point target"
+            >
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                <path d="M17 3a2.85 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z" />
+              </svg>
+              Edit
+            </button>
+          </div>
+          <div class="goal-empty" id="goalEmpty">
+            <p class="note">Pick a points target — Overwatch coins, a gift card, anything.</p>
+          </div>
+          <div class="goal-progress" id="goalProgress" hidden>
+            <div class="goal-line">
+              <span class="goal-balance" id="goalBalance">—</span>
+              <span class="goal-target" id="goalTarget">—</span>
+            </div>
+            <div class="goal-bar" aria-hidden="true">
+              <span class="goal-fill" id="goalFill"></span>
+            </div>
+            <p class="note" id="goalNote"></p>
+          </div>
+          <!-- The inline editor the Edit button opens: a plain point count.
+               0 or empty saves "no goal" again. -->
+          <div class="goal-edit" id="goalEdit" hidden>
+            <div class="input-wrap">
+              <input
+                type="number"
+                id="goalPtsInput"
+                min="0"
+                inputmode="numeric"
+                aria-label="Goal in points"
+              />
+              <span class="unit" aria-hidden="true">pts</span>
+            </div>
+            <button type="button" class="btn btn-compact" id="goalSaveBtn">Save</button>
+          </div>
+        </div>
+        <!-- The sparkline (ADR-020): one point per day of the recorded
+           history, the delta each day between its first and last snapshot.
+           Hidden until at least two days exist — one point is not a line. -->
+        <div class="spark-block" id="sparkBlock" hidden>
+          <p class="group-label">Points per day</p>
+          <svg class="spark" id="sparkChart" viewBox="0 0 240 48" preserveAspectRatio="none" aria-hidden="true"></svg>
+          <p class="note" id="sparkNote"></p>
+        </div>
+        <!-- The plan preview: one line per enabled step, would-run or the
+             skip verdict's own wording. Hidden until a today-fresh read
+             exists — a stale read has no verdicts. -->
+        <div class="plan-block" id="planBlock" hidden>
+          <p class="group-label">If the routine ran now</p>
+          <ul class="plan-list" id="planList"></ul>
+        </div>
+        <!-- The four activity streaks as chips: each shows both of the Earn
+             page's streak-card values ("Day 4 of 7 · 1/1"). -->
+        <div id="streaksBlock">
+          <p class="group-label">Streaks</p>
+          <div class="chip-row">
+            <span class="chip">
+              <span class="chip-name">Bing search</span>
+              <span class="chip-value is-empty" id="statBingSearch">—</span>
+            </span>
+            <span class="chip">
+              <span class="chip-name">Daily set</span>
+              <span class="chip-value is-empty" id="statDailySet">—</span>
+            </span>
+            <span class="chip">
+              <span class="chip-name">Bing app</span>
+              <span class="chip-value is-empty" id="statBingApp">—</span>
+            </span>
+            <span class="chip">
+              <span class="chip-name">Visual search</span>
+              <span class="chip-value is-empty" id="statVisualSearch">—</span>
+            </span>
+          </div>
+        </div>
+        <p class="note" id="statsUpdated">Not yet updated</p>
+      </section>
+
+      <!-- THE RUN VIEW: the big button first — the whole startup plan on
+           demand (ADR-020; the press is the confirmation, the launch gates
+           are opted out) — then the individual actions for when only one
+           step is wanted. -->
+      <section class="card view" id="runNowCard" data-view="runNow" style="--i: 2">
+        <div class="card-head">
+          <h2>Run</h2>
+        </div>
+        <div class="actions">
+          <!-- The hero: the whole routine — every enabled step in the
+               Settings view's order — started right now, no prompt. Long-
+               running like the rest; the status pill and the Activity rows
+               report as it goes. -->
+          <button type="button" class="btn btn-primary btn-wide btn-hero" id="runRoutineBtn">
+            <svg viewBox="0 0 24 24" fill="currentColor" stroke="none" aria-hidden="true">
+              <path d="M13 2 3 14h7l-1 8 11-13h-7l1-7z" stroke-linejoin="round" />
+            </svg>
+            Run the routine
+          </button>
+          <!-- First of the single actions and full-width: the search batch
+               is the long-running workhorse and the popup's primary single
+               action. A split button: the label half runs the batch, the
+               square gear half opens this card's own search settings below
+               (the batch size and the delays). -->
+          <button type="button" class="btn btn-primary btn-wide" id="startSearchBtn">
+            <span class="btn-search-main">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                <circle cx="11" cy="11" r="7" />
+                <path d="m20 20-3.5-3.5" />
+              </svg>
+              Search
+            </span>
+            <!-- The gear half. A span, not a nested button — HTML forbids
+                 buttons inside buttons — and its handlers stop propagation
+                 so Search itself never fires from a gear click. -->
+            <span
+              class="btn-gear"
+              id="searchSettingsBtn"
+              role="button"
+              tabindex="0"
+              aria-expanded="false"
+              aria-label="Search settings"
+              title="Search settings"
+            >
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                <circle cx="12" cy="12" r="3" />
+                <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 1 1-4 0v-.09a1.65 1.65 0 0 0-1-1.51 1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 1 1 0-4h.09a1.65 1.65 0 0 0 1.51-1 1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33h.01a1.65 1.65 0 0 0 1-1.51V3a2 2 0 1 1 4 0v.09a1.65 1.65 0 0 0 1 1.51h.01a1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82v.01a1.65 1.65 0 0 0 1.51 1H21a2 2 0 1 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1Z" />
+              </svg>
+            </span>
+          </button>
+          <button type="button" class="btn" id="runDailySetBtn">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+              <rect x="3" y="4" width="18" height="17" rx="2" />
+              <path d="M8 2v4M16 2v4M3 10h18M9 15.5l2 2 3.5-3.5" />
+            </svg>
+            Daily set
+          </button>
+          <button type="button" class="btn" id="runKeepEarningBtn">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+              <rect x="3" y="8" width="18" height="4" rx="1" />
+              <path d="M12 8v13" />
+              <path d="M19 12v7a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2v-7" />
+              <path d="M7.5 8a2.5 2.5 0 0 1 0-5A4.8 8 0 0 1 12 8a4.8 8 0 0 1 4.5-5 2.5 2.5 0 0 1 0 5" />
+            </svg>
+            Keep earning
+          </button>
+          <button type="button" class="btn" id="runImageSearchBtn">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+              <rect x="3" y="3" width="18" height="18" rx="2" />
+              <circle cx="9" cy="9" r="2" />
+              <path d="m21 15-4.5-4.5L3 21" />
+            </svg>
+            Image
+          </button>
+          <button type="button" class="btn" id="claimBtn">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+              <circle cx="12" cy="12" r="10" />
+              <path d="M16 8h-6a2 2 0 1 0 0 4h4a2 2 0 1 1 0 4H8" />
+              <path d="M12 6v2m0 8v2" />
+            </svg>
+            Claim
+          </button>
+          <!-- Experimental (Settings → Experimental features): opens the
+               Rewards dashboard and applies every coupon in the panel.
+               Green while a read saw coupons unapplied, grayed when the
+               last read saw them all applied. Experimental because the
+               claim flow has not run against a live coupon yet. -->
+          <button type="button" class="btn btn-coupon" id="couponBtn">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+              <path d="M20 12v10H4V12" />
+              <path d="M2 7h20v5H2z" />
+              <path d="M12 22V7" />
+              <path d="M12 7H7.5a2.5 2.5 0 0 1 0-5C11 2 12 7 12 7z" />
+              <path d="M12 7h4.5a2.5 2.5 0 0 0 0-5C13 2 12 7 12 7z" />
+            </svg>
+            Coupons
+          </button>
+          <!-- One row, two very different jobs: Stop fills it — the one
+               control that must be findable in a hurry — and Clear tabs
+               rides along at compact size, its two-click arm still guarding
+               the destructive action. -->
+          <div class="stop-row">
+            <button type="button" class="btn btn-stop" id="stopBtn" disabled>
+              <svg viewBox="0 0 24 24" fill="currentColor" stroke="none" aria-hidden="true">
+                <rect x="6" y="6" width="12" height="12" rx="2" />
+              </svg>
+              Stop
+            </button>
+            <!-- Two-step on purpose: one stray click would otherwise take out
+                 every tab in the window. -->
+            <button
+              type="button"
+              class="btn btn-quiet btn-compact"
+              id="clearTabsBtn"
+              data-armed="false"
+              title="Opens a fresh tab and closes the rest of this window"
+            >
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                <path d="M4 6h11a2 2 0 0 1 2 2v11a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2Z" />
+                <path d="M8 3h11a2 2 0 0 1 2 2v11" />
+              </svg>
+              <span class="btn-label" id="clearTabsLabel">Clear tabs</span>
+            </button>
+          </div>
+        </div>
+        <!-- Search settings (the gear in the Search button above opens
+             this): the batch mode (manual or automatic), the batch size, and
+             the delays, hidden by default. A panel of this card, not a card
+             of its own — the layout editor cannot hide, show or reorder it,
+             only the gear can. -->
+        <div class="search-settings" id="searchSettings" hidden>
+        <!-- Batch mode (2026-09-05, user spec): Manual runs exactly the count
+             set below — no points check before or after. Automatic checks the
+             points first, right-sizes to what the day still needs, re-checks
+             after the batch, and runs more if it fell short (ADR-016 §7 + §8).
+             One setting key underneath: rightSizeSearchBatch — automatic is
+             on, manual is off. -->
+        <p class="group-label">Batch mode</p>
+        <div class="opts">
+          <label class="opt opt-radio">
+            <span class="opt-text">
+              Manual
+              <span class="note">Run exactly the searches set below — no points check before or after.</span>
+            </span>
+            <input
+              type="radio"
+              name="searchBatchMode"
+              id="searchModeManual"
+              value="manual"
+              aria-label="Manual search batch"
+            />
+          </label>
+          <label class="opt opt-radio">
+            <span class="opt-text">
+              Automatic
+              <span class="note">Check the points first, run only what's needed, then re-check — and run more if short.</span>
+            </span>
+            <input
+              type="radio"
+              name="searchBatchMode"
+              id="searchModeAutomatic"
+              value="automatic"
+              aria-label="Automatic search batch"
+            />
+          </label>
+        </div>
+
+        <div class="fields">
+          <div class="field field-wide">
+            <label for="searchesPerBatch">Searches per batch</label>
+            <div class="input-wrap">
+              <input
+                type="number"
+                id="searchesPerBatch"
+                min="1"
+                max="100"
+                inputmode="numeric"
+              />
+              <span class="unit" aria-hidden="true">queries</span>
+            </div>
+          </div>
+        </div>
+
+        <div class="fields fields-2">
+          <div class="field">
+            <label for="minDelaySec">Min delay</label>
+            <div class="input-wrap">
+              <input type="number" id="minDelaySec" min="0" max="120" inputmode="numeric" />
+              <span class="unit" aria-hidden="true">s</span>
+            </div>
+          </div>
+          <div class="field">
+            <label for="maxDelaySec">Max delay</label>
+            <div class="input-wrap">
+              <input type="number" id="maxDelaySec" min="0" max="300" inputmode="numeric" />
+              <span class="unit" aria-hidden="true">s</span>
+            </div>
+          </div>
+        </div>
+        </div>
+      </section>
+
+      <!-- THE REDEEM VIEW: pick one of the Overwatch-coin amounts the watch
+           read from the product's detail page, then open that amount's own
+           sku page. It spends real points, so the page opens in the
+           foreground; when the last stats read says the balance covers the
+           amount (10 points per coin) the background presses Redeem Now on
+           the page, and the button says "Redeem". When it can't, the button
+           says "View page" and nothing is pressed — the page is the user's
+           to look at. "Set as goal" copies the amount's price into the
+           Today view's goal (ADR-020). -->
+      <section class="card view" id="redeemCard" data-view="redeem" style="--i: 4">
+        <div class="card-head">
+          <h2>Redeem</h2>
+        </div>
+        <div class="fields">
+          <div class="field field-wide">
+            <label for="redeemVariant">Coin amount</label>
+            <div class="input-wrap">
+              <select id="redeemVariant"></select>
+            </div>
+          </div>
+        </div>
+        <div class="actions">
+          <button type="button" class="btn btn-primary btn-wide" id="redeemBtn" disabled>
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+              <path d="M20 12v10H4V12" />
+              <path d="M2 7h20v5H2z" />
+              <path d="M12 22V7" />
+              <path d="m12 7H7.5a2.5 2.5 0 0 1 0-5C11 2 12 7 12 7z" />
+              <path d="m12 7h4.5a2.5 2.5 0 0 0 0-5C13 2 12 7 12 7z" />
+            </svg>
+            <span id="redeemBtnLabel">View page</span>
+          </button>
+          <!-- ADR-020: the chosen amount's price becomes the Today view's
+               goal target. Disabled until a variant is chosen. -->
+          <button type="button" class="btn btn-wide" id="setGoalBtn" disabled>
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+              <circle cx="12" cy="12" r="10" />
+              <circle cx="12" cy="12" r="6" />
+              <circle cx="12" cy="12" r="2" />
+            </svg>
+            Set as goal
+          </button>
+        </div>
+        <p class="note" id="redeemNote">Refresh in Today reads your points and the amounts.</p>
+        <!-- The restock watcher (ADR-019, ported from the 3.1.0 work): a
+             background alarm re-runs the redeem watch every 2 hours, so the
+             restock/sold-out banners at the top of the main view stay fresh
+             without the popup. Opt-in — each round opens a background tab. -->
+        <div class="opts opts-card">
+          <label class="opt">
+            <span class="opt-text">
+              Restock watcher
+              <span class="note">Re-check the amounts every 2 hours in the background.</span>
+            </span>
+            <span class="switch switch-sm">
+              <input
+                type="checkbox"
+                id="restockWatcherEnabled"
+                aria-label="Watch for restocks in the background"
+              />
+              <span class="switch-track" aria-hidden="true">
+                <span class="switch-thumb"></span>
+              </span>
+            </span>
+          </label>
+        </div>
+      </section>
+
+      <!-- THE ACTIVITY VIEW: the log. Developer Option gated (the switch
+           lives in the Settings view), like the topbar's preview buttons. -->
+      <section class="card view" id="activityCard" data-view="activity" style="--i: 5">
+        <div class="card-head">
+          <h2>Activity</h2>
+        </div>
+        <dl class="log">
+          <!-- The stats read's report (2026-09-05): same reason as the
+               Redeem row below — the read tabs are background tabs whose
+               console nobody can open, so a page that surprised a reader
+               surfaces here. Hover the row for the markup dump. -->
+          <div class="log-row">
+            <dt>Stats</dt>
+            <dd id="lastStatsLog" class="is-empty">Nothing yet</dd>
+          </div>
+          <div class="log-row">
+            <dt>Rewards</dt>
+            <dd id="lastRewards" class="is-empty">Nothing yet</dd>
+          </div>
+          <!-- The redeem watch's report (2026-09-03): the read runs in a
+               background tab whose console nobody can open, so its outcome —
+               and, on a failure, the markup the reader stared at (ADR-010) —
+               lands here instead. Hover the row for the dump. -->
+          <div class="log-row">
+            <dt>Redeem</dt>
+            <dd id="lastRedeemLog" class="is-empty">Nothing yet</dd>
+          </div>
+          <div class="log-row">
+            <dt>Source</dt>
+            <dd id="lastApi" class="is-empty">Nothing yet</dd>
+          </div>
+          <div class="log-row">
+            <dt>Last query</dt>
+            <dd id="lastQueryText" class="mono is-empty">Nothing yet</dd>
+          </div>
+          <div class="log-row">
+            <dt>Image search</dt>
+            <dd id="lastImageSearch" class="is-empty">Nothing yet</dd>
+          </div>
+          <div class="log-row">
+            <dt>Tabs</dt>
+            <dd id="lastTabAction" class="is-empty">Nothing yet</dd>
+          </div>
+        </dl>
+      </section>
+    </main>
+
+    <!-- The bottom tab bar (ADR-020): the app shell's navigation. One
+         button per view, in settings.sectionOrder's order (popup.js applies
+         it before the first paint; this DOM order is the pre-JS fallback);
+         a tab whose view is hidden (the Tabs card's switches) is hidden too,
+         and the Activity tab stays behind the Developer Option gate. The
+         selected tab is aria-selected; html[data-view] carries the choice
+         for CSS. -->
+    <nav class="tabbar" aria-label="Views">
+      <button type="button" class="tab" data-tab="today" aria-selected="true">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+          <circle cx="12" cy="12" r="4" />
+          <path d="M12 2v2" /><path d="M12 20v2" /><path d="m4.93 4.93 1.41 1.41" />
+          <path d="m17.66 17.66 1.41 1.41" /><path d="M2 12h2" /><path d="M20 12h2" />
+          <path d="m6.34 17.66-1.41 1.41" /><path d="m19.07 4.93-1.41 1.41" />
+        </svg>
+        <span>Today</span>
+      </button>
+      <button type="button" class="tab" data-tab="runNow" aria-selected="false">
+        <svg viewBox="0 0 24 24" fill="currentColor" stroke="none" aria-hidden="true">
+          <path d="M13 2 3 14h7l-1 8 11-13h-7l1-7z" stroke-linejoin="round" />
+        </svg>
+        <span>Run</span>
+      </button>
+      <button type="button" class="tab" data-tab="redeem" aria-selected="false">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+          <rect x="3" y="8" width="18" height="4" rx="1" />
+          <path d="M12 8v13" />
+          <path d="M19 12v7a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2v-7" />
+          <path d="M7.5 8a2.5 2.5 0 0 1 0-5A4.8 8 0 0 1 12 8a4.8 8 0 0 1 4.5-5 2.5 2.5 0 0 1 0 5" />
+        </svg>
+        <span>Redeem</span>
+      </button>
+      <button type="button" class="tab" data-tab="activity" aria-selected="false">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+          <path d="M3 12h4l2-7 4 14 2-7h6" />
+        </svg>
+        <span>Activity</span>
+      </button>
+    </nav>
+
+    <!-- The Settings view (2026-09-03): the topbar's gear button (and the
+         Back button up top) switches between this and the tabbed views. The
+         set-and-forget configuration moved here — the startup plan, the
+         tabs and the former Advanced panel — leaving the tabs to the things
+         acted on daily. The window keeps its height across the switch; this
+         page scrolls inside it. -->
+    <main id="settingsView" hidden>
+      <div class="settings-head">
+        <button type="button" class="btn btn-quiet" id="settingsBackBtn">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <path d="m12 19-7-7 7-7" />
+            <path d="M19 12H5" />
+          </svg>
+          Back
+        </button>
+        <h2>Settings</h2>
+      </div>
+
+      <!-- The Tabs card (ADR-020): the bottom tab bar's order and
+           visibility. Same drag-to-reorder machinery as the startup steps
+           below — order is data, read from the DOM order of the rows and
+           persisted as settings.sectionOrder (data-view-key). The switches
+           write hiddenSections, so a tab switched off disappears from the
+           bar (and the view with it). Activity keeps its Developer Option
+           gate on top of this. -->
+      <section class="card" id="tabsCard" style="--i: 0">
+        <div class="card-head">
+          <div>
+            <h2>Tabs</h2>
+            <p class="note">Drag to reorder. Switch a tab off to hide it.</p>
+          </div>
+        </div>
+        <ol class="steps" id="viewOrder">
+          <li class="step" data-view="today">
+            <button
+              type="button"
+              class="step-handle"
+              aria-label="Reorder the Today tab"
+              title="Drag, or use the arrow keys, to reorder"
+            >
+              <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+                <circle cx="9" cy="5" r="1.5" /><circle cx="15" cy="5" r="1.5" />
+                <circle cx="9" cy="12" r="1.5" /><circle cx="15" cy="12" r="1.5" />
+                <circle cx="9" cy="19" r="1.5" /><circle cx="15" cy="19" r="1.5" />
+              </svg>
+            </button>
+            <span class="step-index" aria-hidden="true">1</span>
+            <span class="step-title">Today</span>
+            <span class="step-value">The day at a glance</span>
+            <label class="switch switch-sm">
+              <input
+                type="checkbox"
+                data-view-toggle="today"
+                aria-label="Show the Today tab"
+              />
+              <span class="switch-track" aria-hidden="true">
+                <span class="switch-thumb"></span>
+              </span>
+            </label>
+          </li>
+          <li class="step" data-view="runNow">
+            <button
+              type="button"
+              class="step-handle"
+              aria-label="Reorder the Run tab"
+              title="Drag, or use the arrow keys, to reorder"
+            >
+              <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+                <circle cx="9" cy="5" r="1.5" /><circle cx="15" cy="5" r="1.5" />
+                <circle cx="9" cy="12" r="1.5" /><circle cx="15" cy="12" r="1.5" />
+                <circle cx="9" cy="19" r="1.5" /><circle cx="15" cy="19" r="1.5" />
+              </svg>
+            </button>
+            <span class="step-index" aria-hidden="true">2</span>
+            <span class="step-title">Run</span>
+            <span class="step-value">The routine and single actions</span>
+            <label class="switch switch-sm">
+              <input
+                type="checkbox"
+                data-view-toggle="runNow"
+                aria-label="Show the Run tab"
+              />
+              <span class="switch-track" aria-hidden="true">
+                <span class="switch-thumb"></span>
+              </span>
+            </label>
+          </li>
+          <li class="step" data-view="redeem">
+            <button
+              type="button"
+              class="step-handle"
+              aria-label="Reorder the Redeem tab"
+              title="Drag, or use the arrow keys, to reorder"
+            >
+              <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+                <circle cx="9" cy="5" r="1.5" /><circle cx="15" cy="5" r="1.5" />
+                <circle cx="9" cy="12" r="1.5" /><circle cx="15" cy="12" r="1.5" />
+                <circle cx="9" cy="19" r="1.5" /><circle cx="15" cy="19" r="1.5" />
+              </svg>
+            </button>
+            <span class="step-index" aria-hidden="true">3</span>
+            <span class="step-title">Redeem</span>
+            <span class="step-value">Coin amounts and the goal</span>
+            <label class="switch switch-sm">
+              <input
+                type="checkbox"
+                data-view-toggle="redeem"
+                aria-label="Show the Redeem tab"
+              />
+              <span class="switch-track" aria-hidden="true">
+                <span class="switch-thumb"></span>
+              </span>
+            </label>
+          </li>
+          <li class="step" data-view="activity">
+            <button
+              type="button"
+              class="step-handle"
+              aria-label="Reorder the Activity tab"
+              title="Drag, or use the arrow keys, to reorder"
+            >
+              <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+                <circle cx="9" cy="5" r="1.5" /><circle cx="15" cy="5" r="1.5" />
+                <circle cx="9" cy="12" r="1.5" /><circle cx="15" cy="12" r="1.5" />
+                <circle cx="9" cy="19" r="1.5" /><circle cx="15" cy="19" r="1.5" />
+              </svg>
+            </button>
+            <span class="step-index" aria-hidden="true">4</span>
+            <span class="step-title">Activity</span>
+            <span class="step-value">The log (Developer Option)</span>
+            <label class="switch switch-sm">
+              <input
+                type="checkbox"
+                data-view-toggle="activity"
+                aria-label="Show the Activity tab"
+              />
+              <span class="switch-track" aria-hidden="true">
+                <span class="switch-thumb"></span>
+              </span>
+            </label>
+          </li>
+        </ol>
+      </section>
+
+      <section class="card" id="startupCard" data-off="false" style="--i: 1">
+        <div class="card-head">
+          <div>
+            <h2>Run on startup</h2>
+            <p class="note">Drag to reorder. Runs top to bottom at launch.</p>
+          </div>
+          <label class="switch">
+            <input
+              type="checkbox"
+              id="startupEnabled"
+              aria-label="Enable the startup sequence"
+              aria-controls="startupSteps"
+            />
+            <span class="switch-track" aria-hidden="true">
+              <span class="switch-thumb"></span>
+            </span>
+          </label>
+        </div>
+
+        <!-- The gate for the whole sequence, so it sits above the plan. The
+             "day" is the local calendar one: it resets at midnight. -->
+        <div class="opts">
+          <label class="opt">
+            <span class="opt-text">
+              Once per day
+              <span class="note">Skip the startup routine when it already finished today. Resets at midnight.</span>
+            </span>
+            <span class="switch switch-sm">
+              <input type="checkbox" id="startupOncePerDay" />
+              <span class="switch-track" aria-hidden="true">
+                <span class="switch-thumb"></span>
+              </span>
+            </span>
+          </label>
+          <!-- Only the automatic routine asks — the Run now buttons are
+               explicit user actions already. -->
+          <label class="opt">
+            <span class="opt-text">
+              Ask before running
+              <span class="note">Show a cancel prompt when the routine starts automatically.</span>
+            </span>
+            <span class="switch switch-sm">
+              <input type="checkbox" id="confirmBeforeRoutine" />
+              <span class="switch-track" aria-hidden="true">
+                <span class="switch-thumb"></span>
+              </span>
+            </span>
+          </label>
+        </div>
+
+        <!-- The scheduled daily run (ADR-019): start the routine at a fixed
+             local time, independent of the launch-time routine above. Fires
+             only while Chrome runs; a time missed while the browser was closed
+             runs on the next browser start (the once-per-day gate keeps it
+             from doubling up with the launch routine). The time field is
+             inert until the toggle is on. -->
+        <p class="group-label">Scheduled run</p>
+        <div class="opts">
+          <label class="opt">
+            <span class="opt-text">
+              Run every day at a set time
+              <span class="note">Also runs without a browser launch — a missed time catches up on the next start.</span>
+            </span>
+            <span class="opt-side">
+              <input
+                type="time"
+                id="scheduledRunTime"
+                aria-label="Daily run time"
+                disabled
+              />
+              <span class="switch switch-sm">
+                <input
+                  type="checkbox"
+                  id="scheduledRunEnabled"
+                  aria-label="Run the routine daily at a set time"
+                />
+                <span class="switch-track" aria-hidden="true">
+                  <span class="switch-thumb"></span>
+                </span>
+              </span>
+            </span>
+          </label>
+        </div>
+
+        <!-- Order is data: popup.js reads and writes settings.startupOrder from
+             the DOM order of these rows, keyed by data-step. -->
+        <ol class="steps" id="startupSteps">
+          <li class="step" data-step="stats">
+            <button
+              type="button"
+              class="step-handle"
+              aria-label="Reorder stats"
+              title="Drag, or use the arrow keys, to reorder"
+            >
+              <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+                <circle cx="9" cy="5" r="1.5" /><circle cx="15" cy="5" r="1.5" />
+                <circle cx="9" cy="12" r="1.5" /><circle cx="15" cy="12" r="1.5" />
+                <circle cx="9" cy="19" r="1.5" /><circle cx="15" cy="19" r="1.5" />
+              </svg>
+            </button>
+            <span class="step-index" aria-hidden="true">1</span>
+            <label class="step-title" for="statsStartupEnabled">Stats</label>
+            <!-- The routine's opening read: points, streaks and the Overwatch
+                 watch, refreshed before the steps churn the dashboard. -->
+            <span class="step-value">Points &amp; streaks</span>
+            <label class="switch switch-sm">
+              <input
+                type="checkbox"
+                id="statsStartupEnabled"
+                aria-label="Read the Rewards stats at the start of the routine"
+              />
+              <span class="switch-track" aria-hidden="true">
+                <span class="switch-thumb"></span>
+              </span>
+            </label>
+          </li>
+
+          <li class="step" data-step="claim">
+            <button
+              type="button"
+              class="step-handle"
+              aria-label="Reorder claim"
+              title="Drag, or use the arrow keys, to reorder"
+            >
+              <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+                <circle cx="9" cy="5" r="1.5" /><circle cx="15" cy="5" r="1.5" />
+                <circle cx="9" cy="12" r="1.5" /><circle cx="15" cy="12" r="1.5" />
+                <circle cx="9" cy="19" r="1.5" /><circle cx="15" cy="19" r="1.5" />
+              </svg>
+            </button>
+            <span class="step-index" aria-hidden="true">2</span>
+            <label class="step-title" for="claimStartupEnabled">Claim</label>
+            <!-- No count to read back: the step claims whatever is pending. -->
+            <span class="step-value">Pending points</span>
+            <label class="switch switch-sm">
+              <input
+                type="checkbox"
+                id="claimStartupEnabled"
+                aria-label="Claim pending Rewards points on startup"
+              />
+              <span class="switch-track" aria-hidden="true">
+                <span class="switch-thumb"></span>
+              </span>
+            </label>
+          </li>
+
+          <li class="step" data-step="dailySet">
+            <button
+              type="button"
+              class="step-handle"
+              aria-label="Reorder daily set"
+              title="Drag, or use the arrow keys, to reorder"
+            >
+              <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+                <circle cx="9" cy="5" r="1.5" /><circle cx="15" cy="5" r="1.5" />
+                <circle cx="9" cy="12" r="1.5" /><circle cx="15" cy="12" r="1.5" />
+                <circle cx="9" cy="19" r="1.5" /><circle cx="15" cy="19" r="1.5" />
+              </svg>
+            </button>
+            <span class="step-index" aria-hidden="true">3</span>
+            <label class="step-title" for="dailySetStartupEnabled">Daily set</label>
+            <!-- Reads back the matching Advanced field, so the list doubles as a
+                 summary of what each step will actually do. -->
+            <span class="step-value" id="stepDailySetCount">3 tiles</span>
+            <label class="switch switch-sm">
+              <input
+                type="checkbox"
+                id="dailySetStartupEnabled"
+                aria-label="Run the daily set on startup"
+              />
+              <span class="switch-track" aria-hidden="true">
+                <span class="switch-thumb"></span>
+              </span>
+            </label>
+          </li>
+
+          <li class="step" data-step="keepEarning">
+            <button
+              type="button"
+              class="step-handle"
+              aria-label="Reorder keep earning"
+              title="Drag, or use the arrow keys, to reorder"
+            >
+              <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+                <circle cx="9" cy="5" r="1.5" /><circle cx="15" cy="5" r="1.5" />
+                <circle cx="9" cy="12" r="1.5" /><circle cx="15" cy="12" r="1.5" />
+                <circle cx="9" cy="19" r="1.5" /><circle cx="15" cy="19" r="1.5" />
+              </svg>
+            </button>
+            <span class="step-index" aria-hidden="true">4</span>
+            <label class="step-title" for="keepEarningStartupEnabled">Keep earning</label>
+            <!-- "all" is the useful default: the section holds a different
+                 number of activities each day. -->
+            <span class="step-value" id="stepKeepEarningCount">all</span>
+            <label class="switch switch-sm">
+              <input
+                type="checkbox"
+                id="keepEarningStartupEnabled"
+                aria-label="Run keep earning on startup"
+              />
+              <span class="switch-track" aria-hidden="true">
+                <span class="switch-thumb"></span>
+              </span>
+            </label>
+          </li>
+
+          <li class="step" data-step="search">
+            <button
+              type="button"
+              class="step-handle"
+              aria-label="Reorder web searches"
+              title="Drag, or use the arrow keys, to reorder"
+            >
+              <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+                <circle cx="9" cy="5" r="1.5" /><circle cx="15" cy="5" r="1.5" />
+                <circle cx="9" cy="12" r="1.5" /><circle cx="15" cy="12" r="1.5" />
+                <circle cx="9" cy="19" r="1.5" /><circle cx="15" cy="19" r="1.5" />
+              </svg>
+            </button>
+            <span class="step-index" aria-hidden="true">5</span>
+            <label class="step-title" for="searchStartupEnabled">Web searches</label>
+            <span class="step-value">
+              <span id="stepSearchCount">30</span> queries
+            </span>
+            <label class="switch switch-sm">
+              <input
+                type="checkbox"
+                id="searchStartupEnabled"
+                aria-label="Run web searches on startup"
+              />
+              <span class="switch-track" aria-hidden="true">
+                <span class="switch-thumb"></span>
+              </span>
+            </label>
+          </li>
+
+          <li class="step" data-step="imageSearch">
+            <button
+              type="button"
+              class="step-handle"
+              aria-label="Reorder image search"
+              title="Drag, or use the arrow keys, to reorder"
+            >
+              <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+                <circle cx="9" cy="5" r="1.5" /><circle cx="15" cy="5" r="1.5" />
+                <circle cx="9" cy="12" r="1.5" /><circle cx="15" cy="12" r="1.5" />
+                <circle cx="9" cy="19" r="1.5" /><circle cx="15" cy="19" r="1.5" />
+              </svg>
+            </button>
+            <span class="step-index" aria-hidden="true">6</span>
+            <label class="step-title" for="imageSearchStartupEnabled">Image search</label>
+            <span class="step-value">1 photo</span>
+            <label class="switch switch-sm">
+              <input
+                type="checkbox"
+                id="imageSearchStartupEnabled"
+                aria-label="Run the image search on startup"
+              />
+              <span class="switch-track" aria-hidden="true">
+                <span class="switch-thumb"></span>
+              </span>
+            </label>
+          </li>
+        </ol>
+      </section>
+
+      <!-- The former Advanced panel, promoted to a card of its own: the
+           disclosure is gone — this view IS the expanded state. -->
+      <section class="card" id="advancedCard" style="--i: 2">
+        <div class="card-head">
+          <h2>Advanced</h2>
+        </div>
+
+        <div class="fields fields-2">
+          <div class="field">
+            <label for="tabCloseDelaySec">Close tabs after</label>
+            <div class="input-wrap">
+              <input type="number" id="tabCloseDelaySec" min="0" max="120" inputmode="numeric" />
+              <span class="unit" aria-hidden="true">s</span>
+            </div>
+          </div>
+          <!-- 0 = the automatic fold; the window Chromium allows a popup
+               is 240–600px, and the value is clamped to that on save. -->
+          <div class="field">
+            <label for="popupHeight">Popup height</label>
+            <div class="input-wrap">
+              <input type="number" id="popupHeight" min="0" max="600" inputmode="numeric" />
+              <span class="unit" aria-hidden="true">px · 0 = auto</span>
+            </div>
+          </div>
+          <div class="field">
+            <label for="dailySetMaxTiles">Daily set tiles</label>
+            <div class="input-wrap">
+              <input type="number" id="dailySetMaxTiles" min="1" max="10" inputmode="numeric" />
+            </div>
+          </div>
+          <!-- Keep earning holds a different number of activities each
+               day, so the useful default is "all of them". -->
+          <div class="field field-wide">
+            <label for="keepEarningMaxTiles">Keep earning activities</label>
+            <div class="input-wrap">
+              <input type="number" id="keepEarningMaxTiles" min="0" max="20" inputmode="numeric" />
+              <span class="unit" aria-hidden="true">0 = all</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- Same drag-to-reorder machinery as the startup steps above:
+             order is data here too, read from the DOM order of the rows
+             and persisted as settings.querySourceOrder (data-source). A
+             search batch tries these top to bottom until one answers. -->
+        <p class="group-label">Search query sources</p>
+        <ol class="steps" id="querySources">
+          <li class="step" data-source="bingAutosuggest">
+            <button
+              type="button"
+              class="step-handle"
+              aria-label="Reorder Bing suggestions"
+              title="Drag, or use the arrow keys, to reorder"
+            >
+              <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+                <circle cx="9" cy="5" r="1.5" /><circle cx="15" cy="5" r="1.5" />
+                <circle cx="9" cy="12" r="1.5" /><circle cx="15" cy="12" r="1.5" />
+                <circle cx="9" cy="19" r="1.5" /><circle cx="15" cy="19" r="1.5" />
+              </svg>
+            </button>
+            <span class="step-index" aria-hidden="true">1</span>
+            <span class="step-title">Bing suggestions</span>
+            <span class="step-value">Suggested searches</span>
+          </li>
+          <li class="step" data-source="googleTrends">
+            <button
+              type="button"
+              class="step-handle"
+              aria-label="Reorder Google Trends"
+              title="Drag, or use the arrow keys, to reorder"
+            >
+              <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+                <circle cx="9" cy="5" r="1.5" /><circle cx="15" cy="5" r="1.5" />
+                <circle cx="9" cy="12" r="1.5" /><circle cx="15" cy="12" r="1.5" />
+                <circle cx="9" cy="19" r="1.5" /><circle cx="15" cy="19" r="1.5" />
+              </svg>
+            </button>
+            <span class="step-index" aria-hidden="true">2</span>
+            <span class="step-title">Google Trends</span>
+            <span class="step-value">Daily trending searches</span>
+          </li>
+          <li class="step" data-source="wikipedia">
+            <button
+              type="button"
+              class="step-handle"
+              aria-label="Reorder Wikipedia"
+              title="Drag, or use the arrow keys, to reorder"
+            >
+              <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+                <circle cx="9" cy="5" r="1.5" /><circle cx="15" cy="5" r="1.5" />
+                <circle cx="9" cy="12" r="1.5" /><circle cx="15" cy="12" r="1.5" />
+                <circle cx="9" cy="19" r="1.5" /><circle cx="15" cy="19" r="1.5" />
+              </svg>
+            </button>
+            <span class="step-index" aria-hidden="true">3</span>
+            <span class="step-title">Wikipedia</span>
+            <span class="step-value">Random article summaries</span>
+          </li>
+          <li class="step" data-source="uselessFacts">
+            <button
+              type="button"
+              class="step-handle"
+              aria-label="Reorder Useless facts"
+              title="Drag, or use the arrow keys, to reorder"
+            >
+              <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+                <circle cx="9" cy="5" r="1.5" /><circle cx="15" cy="5" r="1.5" />
+                <circle cx="9" cy="12" r="1.5" /><circle cx="15" cy="12" r="1.5" />
+                <circle cx="9" cy="19" r="1.5" /><circle cx="15" cy="19" r="1.5" />
+              </svg>
+            </button>
+            <span class="step-index" aria-hidden="true">4</span>
+            <span class="step-title">Useless facts</span>
+            <span class="step-value">Random trivia</span>
+          </li>
+          <li class="step" data-source="local">
+            <button
+              type="button"
+              class="step-handle"
+              aria-label="Reorder Offline generator"
+              title="Drag, or use the arrow keys, to reorder"
+            >
+              <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+                <circle cx="9" cy="5" r="1.5" /><circle cx="15" cy="5" r="1.5" />
+                <circle cx="9" cy="12" r="1.5" /><circle cx="15" cy="12" r="1.5" />
+                <circle cx="9" cy="19" r="1.5" /><circle cx="15" cy="19" r="1.5" />
+              </svg>
+            </button>
+            <span class="step-index" aria-hidden="true">5</span>
+            <span class="step-title">Offline generator</span>
+            <span class="step-value">Built-in word list</span>
+          </li>
+        </ol>
+
+        <p class="group-label">Theme</p>
+        <div class="theme-picker" id="themePicker" role="group" aria-label="Color theme">
+          <button type="button" class="theme-btn" data-theme-choice="geist" aria-pressed="true">
+            <span class="theme-swatches" aria-hidden="true"><i style="background:#0070f3"></i><i style="background:#171717"></i><i style="background:#eaeaea"></i></span>
+            <span>Geist</span>
+          </button>
+          <button type="button" class="theme-btn" data-theme-choice="primer" aria-pressed="false">
+            <span class="theme-swatches" aria-hidden="true"><i style="background:#0969da"></i><i style="background:#1f2328"></i><i style="background:#d1d9e0"></i></span>
+            <span>Primer</span>
+          </button>
+          <button type="button" class="theme-btn" data-theme-choice="catppuccin" aria-pressed="false">
+            <span class="theme-swatches" aria-hidden="true"><i style="background:#89b4fa"></i><i style="background:#1e1e2e"></i><i style="background:#cdd6f4"></i></span>
+            <span>Catppuccin</span>
+          </button>
+        </div>
+
+        <!-- The accent picker (ADR-020): an explicit brand color overriding
+             the theme's --brand — the ring, the fills, the switches, the
+             primary buttons. "Theme" (empty string) keeps the palette's own.
+             Popup-only: the worker stores the string and never interprets
+             it. -->
+        <p class="group-label">Accent</p>
+        <div class="theme-picker" id="accentPicker" role="group" aria-label="Accent color">
+          <button type="button" class="theme-btn accent-btn" data-accent-choice="" aria-pressed="true">
+            <span class="accent-swatch" aria-hidden="true"></span>
+            <span>Theme</span>
+          </button>
+          <button type="button" class="theme-btn accent-btn" data-accent-choice="#f472b6" aria-pressed="false">
+            <span class="accent-swatch" style="background:#f472b6" aria-hidden="true"></span>
+            <span>Rose</span>
+          </button>
+          <button type="button" class="theme-btn accent-btn" data-accent-choice="#f59e0b" aria-pressed="false">
+            <span class="accent-swatch" style="background:#f59e0b" aria-hidden="true"></span>
+            <span>Amber</span>
+          </button>
+          <button type="button" class="theme-btn accent-btn" data-accent-choice="#8839ef" aria-pressed="false">
+            <span class="accent-swatch" style="background:#8839ef" aria-hidden="true"></span>
+            <span>Violet</span>
+          </button>
+          <button type="button" class="theme-btn accent-btn" data-accent-choice="#10b981" aria-pressed="false">
+            <span class="accent-swatch" style="background:#10b981" aria-hidden="true"></span>
+            <span>Mint</span>
+          </button>
+          <button type="button" class="theme-btn accent-btn" data-accent-choice="#0070f3" aria-pressed="false">
+            <span class="accent-swatch" style="background:#0070f3" aria-hidden="true"></span>
+            <span>Blue</span>
+          </button>
+        </div>
+
+        <!-- Second axis of the theme system (ADR-003): light or dark.
+             "System" follows the OS (the CSS default); an explicit
+             choice pins color-scheme for this popup only. -->
+        <p class="group-label">Appearance</p>
+        <div class="theme-picker" id="modePicker" role="group" aria-label="Light or dark">
+          <button type="button" class="theme-btn mode-btn" data-mode-choice="auto" aria-pressed="true">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+              <rect width="20" height="14" x="2" y="3" rx="2" /><line x1="8" x2="16" y1="21" y2="21" /><line x1="12" x2="12" y1="17" y2="21" />
+            </svg>
+            <span>System</span>
+          </button>
+          <button type="button" class="theme-btn mode-btn" data-mode-choice="light" aria-pressed="false">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+              <circle cx="12" cy="12" r="4" /><path d="M12 2v2" /><path d="M12 20v2" /><path d="m4.93 4.93 1.41 1.41" /><path d="m17.66 17.66 1.41 1.41" /><path d="M2 12h2" /><path d="M20 12h2" /><path d="m6.34 17.66-1.41 1.41" /><path d="m19.07 4.93-1.41 1.41" />
+            </svg>
+            <span>Light</span>
+          </button>
+          <button type="button" class="theme-btn mode-btn" data-mode-choice="dark" aria-pressed="false">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+              <path d="M12 3a6 6 0 0 0 9 9 9 9 0 1 1-9-9Z" />
+            </svg>
+            <span>Dark</span>
+          </button>
+        </div>
+
+        <!-- One choice: close per feature, or hold everything open until
+             the startup routine ends. The two opt groups below each
+             belong to one mode; popup.js swaps data-close-mode and CSS
+             hides the irrelevant one. -->
+        <div id="closeTabsGroup" data-close-mode="perStep">
+          <p class="group-label">When to close tabs</p>
+          <div class="opts">
+            <label class="opt opt-radio">
+              <span class="opt-text">
+                After each step
+                <span class="note">Every feature's tabs close when it finishes.</span>
+              </span>
+              <input
+                type="radio"
+                name="tabCloseMode"
+                id="tabCloseModePerStep"
+                value="perStep"
+                aria-label="Close tabs after each step"
+              />
+            </label>
+            <label class="opt opt-radio">
+              <span class="opt-text">
+                After the full routine
+                <span class="note">Tabs stay open until the whole startup sequence ends.</span>
+              </span>
+              <input
+                type="radio"
+                name="tabCloseMode"
+                id="tabCloseModeRoutine"
+                value="routine"
+                aria-label="Close tabs after the full routine"
+              />
+            </label>
+          </div>
+
+          <p class="group-label">Close tabs when a step finishes</p>
+          <div class="opts" id="perStepOpts">
+            <label class="opt">
+              <span class="opt-text">
+                After the claim
+                <span class="note">The dashboard tab the claim step opened.</span>
+              </span>
+              <span class="switch switch-sm">
+                <input type="checkbox" id="closeTabsAfterClaim" />
+                <span class="switch-track" aria-hidden="true">
+                  <span class="switch-thumb"></span>
+                </span>
+              </span>
+            </label>
+            <label class="opt">
+              <span class="opt-text">
+                After the daily set
+                <span class="note">Dashboard and the tiles it opened.</span>
+              </span>
+              <span class="switch switch-sm">
+                <input type="checkbox" id="closeTabsAfterDailySet" />
+                <span class="switch-track" aria-hidden="true">
+                  <span class="switch-thumb"></span>
+                </span>
+              </span>
+            </label>
+            <label class="opt">
+              <span class="opt-text">
+                After keep earning
+                <span class="note">The Earn page and its activities.</span>
+              </span>
+              <span class="switch switch-sm">
+                <input type="checkbox" id="closeTabsAfterKeepEarning" />
+                <span class="switch-track" aria-hidden="true">
+                  <span class="switch-thumb"></span>
+                </span>
+              </span>
+            </label>
+            <label class="opt">
+              <span class="opt-text">
+                After web searches
+                <span class="note">Only when the batch runs to the end.</span>
+              </span>
+              <span class="switch switch-sm">
+                <input type="checkbox" id="closeTabsAfterSearch" />
+                <span class="switch-track" aria-hidden="true">
+                  <span class="switch-thumb"></span>
+                </span>
+              </span>
+            </label>
+            <label class="opt">
+              <span class="opt-text">
+                After the image search
+                <span class="note">The visual search tab.</span>
+              </span>
+              <span class="switch switch-sm">
+                <input type="checkbox" id="closeTabsAfterImageSearch" />
+                <span class="switch-track" aria-hidden="true">
+                  <span class="switch-thumb"></span>
+                </span>
+              </span>
+            </label>
+          </div>
+
+          <!-- Only meaningful while the startup tabs are held for the
+               routine sweep — a manual run is a routine of one. -->
+          <div class="opts" id="routineOpts">
+            <label class="opt">
+              <span class="opt-text">
+                After a manual run
+                <span class="note">A feature started from this popup closes its tabs when it ends.</span>
+              </span>
+              <span class="switch switch-sm">
+                <input type="checkbox" id="closeTabsAfterManualRun" />
+                <span class="switch-track" aria-hidden="true">
+                  <span class="switch-thumb"></span>
+                </span>
+              </span>
+            </label>
+          </div>
+        </div>
+
+        <p class="group-label">Extension</p>
+        <div class="opts">
+          <label class="opt">
+            <span class="opt-text">
+              Refresh stats on open
+              <span class="note">Re-read the stats every time this popup opens.</span>
+            </span>
+            <span class="switch switch-sm">
+              <input type="checkbox" id="refreshStatsOnPopupOpen" />
+              <span class="switch-track" aria-hidden="true">
+                <span class="switch-thumb"></span>
+              </span>
+            </span>
+          </label>
+          <label class="opt">
+            <span class="opt-text">
+              Keep pinned tabs
+              <span class="note">Never close a tab you pinned.</span>
+            </span>
+            <span class="switch switch-sm">
+              <input type="checkbox" id="keepPinnedTabs" />
+              <span class="switch-track" aria-hidden="true">
+                <span class="switch-thumb"></span>
+              </span>
+            </span>
+          </label>
+          <label class="opt">
+            <span class="opt-text">
+              Animations
+              <span class="note">Motion in this popup.</span>
+            </span>
+            <span class="switch switch-sm">
+              <input type="checkbox" id="animationsEnabled" />
+              <span class="switch-track" aria-hidden="true">
+                <span class="switch-thumb"></span>
+              </span>
+            </span>
+          </label>
+          <label class="opt">
+            <span class="opt-text">
+              Developer Option
+              <span class="note">Show the Activity section in the main view.</span>
+            </span>
+            <span class="switch switch-sm">
+              <input type="checkbox" id="developerOptionsEnabled" />
+              <span class="switch-track" aria-hidden="true">
+                <span class="switch-thumb"></span>
+              </span>
+            </span>
+          </label>
+          <!-- Experimental features gate the Coupons button in the Run now
+               card. The flows under them have not been verified against the
+               live pages yet, so they are opt-in. -->
+          <label class="opt">
+            <span class="opt-text">
+              Experimental features
+              <span class="note">Show things still being verified, like the Coupons button.</span>
+            </span>
+            <span class="switch switch-sm">
+              <input type="checkbox" id="experimentalFeatures" />
+              <span class="switch-track" aria-hidden="true">
+                <span class="switch-thumb"></span>
+              </span>
+            </span>
+          </label>
+        </div>
+      </section>
+    </main>
+
+    <!-- A module script (ADR-018 pattern): popup.js imports the routine's own
+         pure verdict modules, so the plan preview it renders is computed by
+         the same code the routine itself runs. popup-boot.js above stays
+         classic — it must size the window before the first paint. -->
+    <script type="module" src="popup.js"></script>
+  </body>
+</html>

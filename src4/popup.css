@@ -1,0 +1,1983 @@
+/* Bing Search Automator — popup styles
+ *
+ * The visual language is borrowed rather than invented, so the values below
+ * come from systems that already solved this:
+ *   - themes ............... Geist (vercel/geist), Primer (primer/primitives),
+ *                            Catppuccin (catppuccin/palette)
+ *   - easings and keyframes  Open Props, MIT       (argyleink/open-props)
+ *   - icons .................. Lucide, inlined in popup.html (lucide-icons/lucide)
+ *
+ * Three axes: data-theme on <html> picks the palette (geist | primer |
+ * catppuccin, default geist); the palette tokens are light-dark() pairs, so
+ * light or dark resolves from the color-scheme; and color-scheme itself is
+ * "light dark" (follow the OS) unless data-mode="light"/"dark" pins it — the
+ * Appearance picker (ADR-003). The theme blocks only override palette tokens;
+ * fonts, easings and durations are shared and live in :root alone.
+ *
+ * Motion rules of thumb: transform and opacity only, one job per animation,
+ * nothing over 300ms, and everything gives up under prefers-reduced-motion or
+ * html[data-anim="off"].
+ */
+
+:root {
+  --font-ui: "Segoe UI Variable Text", "Segoe UI", system-ui, ui-sans-serif,
+    -apple-system, sans-serif;
+  --font-mono: ui-monospace, "Cascadia Mono", "SF Mono", Consolas, monospace;
+
+  /* Geist (light, dark) — one token per pair, resolved by color-scheme. */
+  --surface-app: light-dark(#ffffff, #0a0a0a);
+  --surface-card: light-dark(#ffffff, #111111);
+  --surface-sunken: light-dark(#fafafa, #171717);
+  --surface-hover: light-dark(#fafafa, #1a1a1a);
+  --line: light-dark(#eaeaea, #262626);
+  --line-strong: light-dark(#d4d4d4, #333333);
+  --ink: light-dark(#171717, #ededed);
+  --ink-muted: light-dark(#666666, #a1a1a1);
+  --ink-faint: light-dark(#999999, #666666);
+
+  --brand: light-dark(#0070f3, #3291ff);
+  --brand-hover: light-dark(#0061d5, #4c9dff);
+  --brand-ink: light-dark(#ffffff, #0a0a0a);
+  --brand-tint: light-dark(#eaf3fe, #101e2f);
+  --danger: light-dark(#e5484d, #ff4d4d);
+  --danger-tint: light-dark(#fdecec, #2a0f0f);
+  --ok: light-dark(#0f8a4d, #0abf53);
+  --ok-tint: light-dark(#ecf9f2, #0d2018);
+  --warn: light-dark(#e66b00, #ff9540);
+  --warn-tint: light-dark(#fdf1e7, #2b1a0d);
+
+  --shadow-card: none;
+
+  --r-sm: 5px;
+  --r-md: 6px;
+  --r-lg: 8px;
+
+  /* Open Props easings (MIT) — only the handful actually used here. */
+  --ease-3: cubic-bezier(0.25, 0, 0.3, 1);
+  --ease-out-3: cubic-bezier(0, 0, 0.3, 1);
+  --ease-in-out-3: cubic-bezier(0.5, 0, 0.5, 1);
+  --ease-elastic-1: cubic-bezier(0.5, 0.75, 0.75, 1.25);
+  --ease-elastic-3: cubic-bezier(0.5, 1.25, 0.75, 1.25);
+
+  --dur-1: 120ms;
+  --dur-2: 180ms;
+  --dur-3: 260ms;
+
+  /* light dark = follow the OS (the default, "auto" in the Appearance
+     picker); the html[data-mode] rules below pin it for an explicit choice.
+     light-dark() in the tokens and the UA chrome (scrollbars, form controls)
+     both follow this. */
+  color-scheme: light dark;
+}
+
+/* The Appearance picker: an explicit choice overrides the OS for this popup.
+   No attribute (auto) leaves color-scheme at the :root default above. */
+html[data-mode="light"] {
+  color-scheme: light;
+}
+
+html[data-mode="dark"] {
+  color-scheme: dark;
+}
+
+/* Primer (GitHub) */
+[data-theme="primer"] {
+  --surface-app: light-dark(#ffffff, #0d1117);
+  --surface-card: light-dark(#ffffff, #151b23);
+  --surface-sunken: light-dark(#f6f8fa, #0d1117);
+  --surface-hover: light-dark(#eff2f5, #212830);
+  --line: light-dark(#d1d9e0, #3d444d);
+  --line-strong: light-dark(#818b98, #656c76);
+  --ink: light-dark(#1f2328, #f0f6fc);
+  --ink-muted: light-dark(#59636e, #9198a1);
+  --ink-faint: light-dark(#818b98, #656c76);
+
+  --brand: light-dark(#0969da, #1f6feb);
+  --brand-hover: light-dark(#0550ae, #388bfd);
+  --brand-ink: #ffffff;
+  --brand-tint: light-dark(#ddf4ff, #121d2f);
+  --danger: light-dark(#cf222e, #ff7b72);
+  --danger-tint: light-dark(#ffebe9, #25171c);
+  --ok: light-dark(#1a7f37, #3fb950);
+
+  --shadow-card: none;
+
+  --r-sm: 6px;
+  --r-md: 6px;
+  --r-lg: 8px;
+}
+
+/* Catppuccin (Latte / Mocha) */
+[data-theme="catppuccin"] {
+  --surface-app: light-dark(#e6e9ef, #181825);
+  --surface-card: light-dark(#eff1f5, #1e1e2e);
+  --surface-sunken: light-dark(#dce0e8, #11111b);
+  --surface-hover: light-dark(#dce0e8, #262640);
+  --line: light-dark(#ccd0da, #313244);
+  --line-strong: light-dark(#bcc0cc, #45475a);
+  --ink: light-dark(#4c4f69, #cdd6f4);
+  --ink-muted: light-dark(#6c6f85, #a6adc8);
+  --ink-faint: light-dark(#7c7f93, #7f849c);
+
+  --brand: light-dark(#1e66f5, #89b4fa);
+  --brand-hover: light-dark(#1a5ad8, #9cbdfb);
+  --brand-ink: light-dark(#eff1f5, #11111b);
+  --brand-tint: light-dark(#dae3f5, #2b3047);
+  --danger: light-dark(#d20f39, #f38ba8);
+  --danger-tint: light-dark(#ecdae2, #382b3c);
+  --ok: light-dark(#40a02b, #a6e3a1);
+
+  /* light-dark() is a <color> function and a shadow is not one, so the
+     shadow color goes through its own token to keep the pair on one line. */
+  --shadow-card: 0 1px 3px var(--shadow-ink);
+  --shadow-ink: light-dark(rgba(76, 79, 105, 0.06), rgba(0, 0, 0, 0.25));
+
+  --r-sm: 8px;
+  --r-md: 10px;
+  --r-lg: 14px;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+/* The app shell (ADR-020): the body is a fixed-height frame of three rows —
+   topbar, the scrolling view, tabbar — instead of one scrolling document.
+   The scroll moved into <main> so the bars stay put while a view scrolls;
+   html keeps its overflow:hidden so nothing escapes the frame. */
+html {
+  overflow: hidden;
+}
+
+body {
+  /* popupHeight (Settings → Advanced) still overrides this, clamped to
+     Chromium's 240–600. The fallback is only used on the very first open. */
+  width: 360px;
+  height: var(--popup-h, 440px);
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+  background: var(--surface-app);
+  color: var(--ink);
+  font: 400 13px/1.45 var(--font-ui);
+  -webkit-font-smoothing: antialiased;
+}
+
+/* ---------- backdrop ---------- */
+
+/* Retired: the drifting blooms and panning dot grid went with the theme work.
+   The divs stay in popup.html so this only has to hide them. */
+.backdrop {
+  display: none;
+}
+
+/* ---------- top bar ---------- */
+
+.topbar {
+  /* One row (2026-09-05): the name is gone from the bar — only the glyph
+     remains on the left — so there is nothing left for the buttons to
+     crowd. A flex child of the frame now, so it holds its row while the
+     view below scrolls; still positioned, for the sweep's ::after. */
+  position: relative;
+  z-index: 2;
+  flex: none;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 11px 14px;
+  background: var(--surface-app);
+  border-bottom: 1px solid var(--line);
+}
+
+/* Indeterminate sweep while a batch is running — the one place a moving bar
+   actually reports something. */
+.topbar::after {
+  content: "";
+  position: absolute;
+  left: 0;
+  bottom: -1px;
+  width: 100%;
+  height: 2px;
+  opacity: 0;
+  background: linear-gradient(
+    90deg,
+    transparent,
+    var(--brand) 45%,
+    var(--brand) 55%,
+    transparent
+  );
+  transition: opacity var(--dur-2) var(--ease-3);
+}
+
+body[data-running="true"] .topbar::after {
+  opacity: 1;
+  animation: sweep 1.7s var(--ease-in-out-3) infinite;
+}
+
+@keyframes sweep {
+  from {
+    transform: translateX(-100%);
+  }
+  to {
+    transform: translateX(100%);
+  }
+}
+
+.identity {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  min-width: 0;
+}
+
+.glyph {
+  display: grid;
+  place-items: center;
+  width: 28px;
+  height: 28px;
+  flex: none;
+  border-radius: var(--r-md);
+  background: var(--brand-tint);
+  color: var(--brand);
+  border: 1px solid var(--line);
+  transition: transform var(--dur-3) var(--ease-elastic-3);
+}
+
+.glyph svg {
+  width: 15px;
+  height: 15px;
+}
+
+body[data-running="true"] .glyph {
+  transform: scale(1.06);
+}
+
+.topbar-tools {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex: none;
+}
+
+/* The display:grid below would otherwise beat the UA's [hidden] rule —
+   the codebase's standing [hidden] override. */
+.topbar-btn[hidden] {
+  display: none;
+}
+
+.topbar-btn {
+  display: grid;
+  place-items: center;
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  border-radius: var(--r-md);
+  border: 1px solid var(--line);
+  background: var(--surface-sunken);
+  color: var(--ink-muted);
+  cursor: pointer;
+  transition: background var(--dur-2) var(--ease-3),
+    border-color var(--dur-2) var(--ease-3), color var(--dur-2) var(--ease-3);
+}
+
+.topbar-btn svg {
+  width: 13px;
+  height: 13px;
+}
+
+.topbar-btn:hover {
+  color: var(--ink);
+}
+
+.topbar-btn[aria-pressed="true"] {
+  background: var(--brand-tint);
+  border-color: var(--brand);
+  color: var(--brand);
+}
+
+.topbar-btn:focus-visible {
+  outline: 2px solid var(--brand);
+  outline-offset: 1px;
+}
+
+.status {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  flex: none;
+  padding: 4px 9px;
+  border-radius: 999px;
+  border: 1px solid var(--line);
+  background: var(--surface-sunken);
+  color: var(--ink-muted);
+  font-size: 11px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  transition: background var(--dur-2) var(--ease-3),
+    border-color var(--dur-2) var(--ease-3), color var(--dur-2) var(--ease-3);
+}
+
+.status-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--ink-faint);
+  transition: background var(--dur-2) var(--ease-3);
+}
+
+.status[data-state="running"] {
+  background: var(--brand-tint);
+  border-color: color-mix(in srgb, var(--brand) 35%, transparent);
+  color: var(--brand);
+}
+
+.status[data-state="running"] .status-dot {
+  background: var(--brand);
+  animation: pulse 1.6s var(--ease-out-3) infinite;
+}
+
+/* Open Props "pulse", with opacity added so it reads at 6px. */
+@keyframes pulse {
+  50% {
+    opacity: 0.35;
+    transform: scale(0.75);
+  }
+}
+
+/* The count changing is worth noticing. */
+.status-tick {
+  animation: tick var(--dur-3) var(--ease-elastic-3);
+}
+
+@keyframes tick {
+  from {
+    transform: translateY(-3px);
+    opacity: 0.4;
+  }
+}
+
+/* ---------- layout ---------- */
+
+/* Both <main>s are the frame's middle row: whichever is showing takes the
+   space between the bars and scrolls inside it. */
+main {
+  position: relative;
+  z-index: 1;
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 11px 14px 13px;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+
+  /* No scrollbar, but still scrollable. */
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+
+main::-webkit-scrollbar {
+  width: 0;
+  height: 0;
+}
+
+.card {
+  padding: 11px 13px;
+  border: 1px solid var(--line);
+  border-radius: var(--r-lg);
+  background: var(--surface-card);
+  box-shadow: var(--shadow-card);
+
+  /* Staggered entrance; --i is set per card in popup.html. backwards fill keeps
+     the card hidden through its delay instead of flashing first. */
+  animation: rise var(--dur-3) var(--ease-out-3) backwards;
+  animation-delay: calc(var(--i, 0) * 45ms);
+}
+
+@keyframes rise {
+  from {
+    opacity: 0;
+    transform: translateY(7px);
+  }
+}
+
+.card-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+h2 {
+  margin: 0;
+  font-size: 12.5px;
+  font-weight: 600;
+  letter-spacing: -0.005em;
+}
+
+.note {
+  display: block;
+  margin: 2px 0 0;
+  font-size: 11px;
+  line-height: 1.4;
+  color: var(--ink-muted);
+}
+
+.group-label {
+  margin: 13px 0 7px;
+  font-size: 10.5px;
+  font-weight: 600;
+  letter-spacing: 0.03em;
+  text-transform: uppercase;
+  color: var(--ink-faint);
+}
+
+/* ---------- switch ---------- */
+
+.switch {
+  position: relative;
+  display: inline-flex;
+  flex: none;
+}
+
+.switch input {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  margin: 0;
+  opacity: 0;
+  cursor: pointer;
+}
+
+.switch-track {
+  display: inline-flex;
+  align-items: center;
+  width: 36px;
+  height: 20px;
+  padding: 2px;
+  border: 1px solid var(--line-strong);
+  border-radius: 999px;
+  background: var(--surface-sunken);
+  /* Clips the thumb's elastic overshoot at the track edge. */
+  overflow: hidden;
+  transition: background var(--dur-2) var(--ease-3),
+    border-color var(--dur-2) var(--ease-3);
+}
+
+.switch-thumb {
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  background: var(--ink-faint);
+  transition: transform var(--dur-3) var(--ease-elastic-1),
+    background var(--dur-2) var(--ease-3);
+}
+
+.switch input:checked + .switch-track {
+  background: var(--brand);
+  border-color: var(--brand);
+}
+
+.switch input:checked + .switch-track .switch-thumb {
+  transform: translateX(16px);
+  background: #fff;
+}
+
+.switch input:active + .switch-track .switch-thumb {
+  transform: scale(0.88);
+}
+
+.switch input:checked:active + .switch-track .switch-thumb {
+  transform: translateX(16px) scale(0.88);
+}
+
+.switch input:focus-visible + .switch-track {
+  outline: 2px solid var(--brand);
+  outline-offset: 2px;
+}
+
+.switch input:disabled {
+  cursor: default;
+}
+
+.switch-sm .switch-track {
+  width: 30px;
+  height: 17px;
+}
+
+.switch-sm .switch-thumb {
+  width: 11px;
+  height: 11px;
+}
+
+.switch-sm input:checked + .switch-track .switch-thumb {
+  transform: translateX(13px);
+}
+
+.switch-sm input:checked:active + .switch-track .switch-thumb {
+  transform: translateX(13px) scale(0.88);
+}
+
+/* ---------- startup steps ---------- */
+
+.steps {
+  --step-gap: 10px;
+  display: flex;
+  flex-direction: column;
+  gap: var(--step-gap);
+  margin: 8px 0 0;
+  padding: 0;
+  list-style: none;
+  transition: opacity var(--dur-2) var(--ease-3);
+}
+
+.step {
+  position: relative;
+  display: grid;
+  /* handle | number | title | value | switch. Deliberately one line per step:
+     the popup is clamped to the Activity card's top edge, and four two-line
+     rows pushed that past the 600px Chromium allows. */
+  grid-template-columns: 16px 22px 1fr auto auto;
+  align-items: center;
+  column-gap: 9px;
+}
+
+/* Timeline connector. It bleeds into the row gap so the line stays continuous,
+   and hides during a drag, when the rows no longer match their slots. */
+.step:not(:last-child)::before {
+  content: "";
+  position: absolute;
+  left: 35.5px; /* handle 16 + gap 9 + half the 22px index circle */
+  top: 23px;
+  bottom: calc(var(--step-gap) * -1);
+  width: 1px;
+  background: var(--line);
+  transition: opacity var(--dur-1) var(--ease-3);
+}
+
+.steps.is-dragging .step::before {
+  opacity: 0;
+}
+
+.steps.is-dragging {
+  user-select: none;
+}
+
+/* ---------- reorder handle ---------- */
+
+.step-handle {
+  display: grid;
+  place-items: center;
+  width: 16px;
+  height: 22px;
+  padding: 0;
+  border: 0;
+  border-radius: 4px;
+  background: none;
+  color: var(--ink-faint);
+  cursor: grab;
+  touch-action: none; /* let pointermove through instead of scrolling */
+  opacity: 0.55;
+  transition: opacity var(--dur-2) var(--ease-3),
+    color var(--dur-2) var(--ease-3), background var(--dur-2) var(--ease-3);
+}
+
+.step-handle svg {
+  width: 13px;
+  height: 13px;
+}
+
+/* Handles stay quiet until there is an intent to reorder. */
+.card:hover .step-handle:not(:disabled),
+.step-handle:focus-visible {
+  opacity: 1;
+}
+
+.step-handle:hover:not(:disabled) {
+  color: var(--ink);
+  background: var(--surface-sunken);
+}
+
+.step-handle:focus-visible {
+  outline: 2px solid var(--brand);
+  outline-offset: 1px;
+}
+
+.step-handle:disabled {
+  cursor: default;
+}
+
+/* ---------- the tab bar (ADR-020) ---------- */
+
+/* The frame's bottom row: one button per view, in settings.sectionOrder's
+   order (popup.js applies it). Icon over label, like a phone app's tab bar —
+   the popup is now that shape of thing. */
+.tabbar {
+  flex: none;
+  display: flex;
+  padding: 5px 8px 7px;
+  background: var(--surface-app);
+  border-top: 1px solid var(--line);
+}
+
+.tab {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+  padding: 5px 4px 3px;
+  border: 0;
+  border-radius: var(--r-md);
+  background: none;
+  color: var(--ink-faint);
+  font: 500 10px/1 var(--font-ui);
+  cursor: pointer;
+  transition: color var(--dur-2) var(--ease-3),
+    background var(--dur-2) var(--ease-3);
+}
+
+.tab svg {
+  width: 16px;
+  height: 16px;
+}
+
+.tab:hover {
+  color: var(--ink-muted);
+}
+
+/* The selected tab: brand ink and a pill of tint behind it — the same
+   pressed/active vocabulary as the theme buttons. */
+.tab[aria-selected="true"] {
+  color: var(--brand);
+  background: var(--brand-tint);
+}
+
+.tab:focus-visible {
+  outline: 2px solid var(--brand);
+  outline-offset: -2px;
+}
+
+/* The Settings view owns the whole frame: the tab bar has nothing to say
+   there. popup.js sets data-page alongside the [hidden] swaps. */
+html[data-page="settings"] .tabbar {
+  display: none;
+}
+
+/* ---------- view switching (ADR-020) ---------- */
+
+/* One view shows at a time, picked by html[data-view] (mirrored pre-paint
+   by popup-boot.js from the "meowView" localStorage key, so the popup opens
+   where it was left). The rise animation replays on the switch for free —
+   display:none→block re-runs it. */
+.view {
+  display: none;
+}
+
+html[data-view="today"] .view[data-view="today"],
+html[data-view="runNow"] .view[data-view="runNow"],
+html[data-view="redeem"] .view[data-view="redeem"],
+html[data-view="activity"] .view[data-view="activity"] {
+  display: block;
+}
+
+/* ---------- hidden views + the developer option ----------
+   Both gates are attribute selectors on the root so popup-boot.js can mirror
+   the state before the first paint — a view that flashes in and then
+   disappears also flashes the height it briefly measured. The tokens are
+   space-separated, hence the word-match (~=) selectors. The IDs win over
+   the html[data-view] rules no matter the order. */
+html[data-hidden~="today"] #todayCard,
+html[data-hidden~="runNow"] #runNowCard,
+html[data-hidden~="redeem"] #redeemCard,
+html[data-hidden~="activity"] #activityCard {
+  display: none;
+}
+
+/* The Tabs card's switches (Settings) hide a tab outright — the view and
+   its button go together. */
+html[data-hidden~="today"] .tab[data-tab="today"],
+html[data-hidden~="runNow"] .tab[data-tab="runNow"],
+html[data-hidden~="redeem"] .tab[data-tab="redeem"],
+html[data-hidden~="activity"] .tab[data-tab="activity"] {
+  display: none;
+}
+
+/* The Activity view is the developer option: off unless the Settings toggle
+   says otherwise, so the default tab bar ends at Redeem. */
+html[data-dev="off"] #activityCard,
+html[data-dev="off"] .tab[data-tab="activity"] {
+  display: none;
+}
+
+/* The notification-preview button is the same developer option — a test
+   control has no business in the default topbar. So are the routine-done
+   page's opener beside it (2026-09-04) and the once-per-day reset (2026-09-05,
+   user request): a preview of a page the routine itself opens at its end, and
+   a "run the routine again next launch" that exists to be pressed on
+   purpose. */
+html[data-dev="off"] #testNotificationsBtn,
+html[data-dev="off"] #openRoutineDoneBtn,
+html[data-dev="off"] #resetRoutineDayBtn {
+  display: none;
+}
+
+/* Rows slide out of the way; the dragged row tracks the pointer 1:1. */
+.steps.is-dragging .step:not(.is-dragging) {
+  transition: transform var(--dur-2) var(--ease-3);
+}
+
+.step.is-dragging,
+.step.is-settling {
+  z-index: 3;
+  border-radius: var(--r-sm);
+  background: var(--surface-sunken);
+  /* Spread ring instead of padding: pads the lifted row without moving it. */
+  box-shadow: 0 0 0 6px var(--surface-sunken), 0 10px 20px rgba(0, 0, 0, 0.16);
+}
+
+.step.is-dragging {
+  cursor: grabbing;
+}
+
+.step.is-dragging .step-handle {
+  cursor: grabbing;
+  color: var(--ink);
+}
+
+.step.is-settling {
+  transition: transform 150ms var(--ease-3);
+}
+
+.step-index {
+  display: grid;
+  place-items: center;
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  border: 1px solid var(--line);
+  background: var(--surface-sunken);
+  color: var(--ink-muted);
+  font: 600 11px/1 var(--font-mono);
+  transition: color var(--dur-2) var(--ease-3),
+    background var(--dur-2) var(--ease-3),
+    border-color var(--dur-2) var(--ease-3);
+}
+
+.step:has(input:checked) .step-index {
+  background: var(--brand-tint);
+  border-color: color-mix(in srgb, var(--brand) 40%, transparent);
+  color: var(--brand);
+}
+
+/* popup.js adds this on toggle; a transition alone can't overshoot and return. */
+.step-index.is-pop {
+  animation: pop var(--dur-3) var(--ease-elastic-3);
+}
+
+@keyframes pop {
+  50% {
+    transform: scale(1.18);
+  }
+}
+
+.step-title {
+  display: block;
+  min-width: 0;
+  font-size: 12.5px;
+  font-weight: 500;
+  color: var(--ink-muted);
+  cursor: pointer;
+  transition: color var(--dur-2) var(--ease-3);
+}
+
+.step:has(input:checked) .step-title {
+  color: var(--ink);
+}
+
+/* What the step will do, read back from its Advanced field — the settings-row
+   convention of label left, current value right. Tabular so the digits do not
+   shuffle the column when a value changes. */
+.step-value {
+  font-size: 11px;
+  color: var(--ink-faint);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+  transition: color var(--dur-2) var(--ease-3);
+}
+
+.step:has(input:checked) .step-value {
+  color: var(--ink-muted);
+}
+
+/* Master switch off: keep the plan readable, make it plainly inert. The
+   once-per-day row is part of the same inert state — it only matters when the
+   sequence itself runs. */
+.card[data-off="true"] .steps,
+.card[data-off="true"] .opts {
+  opacity: 0.45;
+}
+
+/* The once-per-day row sits between the head and the plan; same top spacing
+   the steps list uses. Only the startup card carries an opts block outside
+   the Advanced panel. */
+#startupCard .opts {
+  margin: 8px 0 0;
+}
+
+.card[data-off="true"] .step-title {
+  cursor: default;
+}
+
+/* The query-source rows in the Advanced panel carry no switches, so the
+   :has(input:checked) states that light up a startup row's index/title/value
+   can never match there — give them the lit look unconditionally. */
+#querySources .step-index {
+  background: var(--brand-tint);
+  border-color: color-mix(in srgb, var(--brand) 40%, transparent);
+  color: var(--brand);
+}
+
+#querySources .step-title {
+  color: var(--ink);
+  cursor: default; /* no checkbox behind it to click */
+}
+
+#querySources .step-value {
+  color: var(--ink-muted);
+}
+
+/* ---------- number fields ---------- */
+
+.fields {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 8px;
+  margin-top: 11px;
+}
+
+.fields-2 {
+  grid-template-columns: repeat(2, 1fr);
+  margin-top: 0;
+}
+
+.field {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  min-width: 0;
+}
+
+.field-wide {
+  grid-column: 1 / -1;
+}
+
+.field > label {
+  font-size: 11px;
+  font-weight: 500;
+  color: var(--ink-muted);
+  transition: color var(--dur-2) var(--ease-3);
+}
+
+.field:focus-within > label {
+  color: var(--brand);
+}
+
+.input-wrap {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 0 9px;
+  border: 1px solid var(--line-strong);
+  border-radius: var(--r-sm);
+  background: var(--surface-card);
+  transition: border-color var(--dur-1) var(--ease-3),
+    box-shadow var(--dur-2) var(--ease-3), transform var(--dur-2) var(--ease-3);
+}
+
+.input-wrap:focus-within {
+  border-color: var(--brand);
+  box-shadow: 0 0 0 3px var(--brand-tint);
+  transform: translateY(-1px);
+}
+
+/* Fires when a typed value gets clamped, so the correction isn't silent.
+   Same shape as Open Props "shake-x", scaled down for a field this small. */
+.input-wrap.is-clamped {
+  animation: nudge-x 360ms var(--ease-out-3);
+}
+
+@keyframes nudge-x {
+  0%,
+  100% {
+    transform: translateX(0);
+  }
+  20% {
+    transform: translateX(-3px);
+  }
+  40% {
+    transform: translateX(3px);
+  }
+  60% {
+    transform: translateX(-2px);
+  }
+  80% {
+    transform: translateX(2px);
+  }
+}
+
+.input-wrap input {
+  width: 100%;
+  min-width: 0;
+  padding: 7px 0;
+  border: 0;
+  background: none;
+  color: var(--ink);
+  font: 500 13px/1.2 var(--font-mono);
+}
+
+.input-wrap input:focus {
+  outline: none;
+}
+
+/* Spin buttons don't fit a grid this narrow; arrow keys still work. */
+.input-wrap input::-webkit-inner-spin-button {
+  appearance: none;
+  margin: 0;
+}
+
+.unit {
+  flex: none;
+  font-size: 11px;
+  color: var(--ink-faint);
+}
+
+/* ---------- the Settings view ---------- */
+
+/* main is display:flex, so the [hidden] attribute alone would not hide a
+   view — the UA's display:none loses to it. */
+main[hidden] {
+  display: none;
+}
+
+.settings-head {
+  /* 1fr / title / 1fr with a phantom right column: the title centers on the
+     popup itself, not on the space left of the Back button. Grid items
+     stretch by default, so the button needs justify-self to stay a button
+     instead of filling its 1fr track. */
+  display: grid;
+  grid-template-columns: 1fr auto 1fr;
+  align-items: center;
+  justify-items: start;
+}
+
+.settings-head::after {
+  content: ""; /* balances the Back button for the true center */
+}
+
+.settings-head h2 {
+  grid-column: 2;
+  justify-self: center;
+  text-align: center;
+  font-size: 13.5px;
+}
+
+/* ---------- the Bing-app warning banner ---------- */
+
+/* A nudge, not an alarm: the Bing-app activity is the one step the
+   automation cannot do (it only counts from the real phone app), so an
+   untouched 0/N after a stats read gets the top slot of the main view.
+   display:flex would beat the UA's [hidden], so the off state is explicit. */
+.banner {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  margin-bottom: 10px;
+  padding: 9px 11px;
+  border-radius: var(--r-lg);
+  border: 1px solid var(--danger);
+  background: var(--danger-tint);
+  color: var(--ink);
+  font-size: 12px;
+  line-height: 1.45;
+}
+
+.banner[hidden] {
+  display: none;
+}
+
+.banner svg {
+  width: 15px;
+  height: 15px;
+  flex: none;
+  margin-top: 1px;
+  color: var(--danger);
+}
+
+/* The stock-news banners (2026-09-03): the redeem watch's availability
+ * flips, split by direction — a restock is good news (green), a sold-out
+ * amount is a warning (orange).
+ */
+.banner.banner-good {
+  border-color: var(--ok);
+  background: var(--ok-tint);
+}
+
+.banner.banner-good svg {
+  color: var(--ok);
+}
+
+.banner.banner-warn {
+  border-color: var(--warn);
+  background: var(--warn-tint);
+}
+
+.banner.banner-warn svg {
+  color: var(--warn);
+}
+
+/* ---------- the Redeem picker ---------- */
+
+/* A select rather than an input: the same wrap, its own control styles. */
+.input-wrap select {
+  width: 100%;
+  min-width: 0;
+  padding: 7px 0;
+  border: 0;
+  background: none;
+  color: var(--ink);
+  font: 500 13px/1.2 var(--font-mono);
+}
+
+.input-wrap select:focus {
+  outline: none;
+}
+
+/* ---------- option rows ---------- */
+
+.opts {
+  display: flex;
+  flex-direction: column;
+}
+
+.opt {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 7px 0;
+  cursor: pointer;
+  border-radius: var(--r-sm);
+  transition: background var(--dur-2) var(--ease-3);
+}
+
+.opt + .opt {
+  border-top: 1px solid var(--line);
+}
+
+.opt:hover {
+  background: color-mix(in srgb, var(--surface-sunken) 60%, transparent);
+}
+
+.opt-text {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--ink);
+}
+
+/* A second control riding beside the switch on an opt row's right side (the
+   scheduled run's time field). */
+.opt-side {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex: none;
+}
+
+.opt-side input[type="time"] {
+  padding: 4px 6px;
+  border: 1px solid var(--line-strong);
+  border-radius: var(--r-sm);
+  background: var(--surface-card);
+  color: var(--ink);
+  font: 500 12px/1.2 var(--font-mono);
+}
+
+.opt-side input[type="time"]:focus {
+  outline: none;
+  border-color: var(--brand);
+  box-shadow: 0 0 0 3px var(--brand-tint);
+}
+
+.opt-side input[type="time"]:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+/* ---------- tab close mode ---------- */
+
+/* The two opt groups belong to the two radio modes; the group's data attribute
+   picks which one is showing. Same hook pattern as data-off on the steps. */
+#closeTabsGroup[data-close-mode="routine"] #perStepOpts,
+#closeTabsGroup[data-close-mode="perStep"] #routineOpts {
+  display: none;
+}
+
+/* A radio row leans on native styling — accent-color keeps the checked dot in
+   the same brand color as the switches, so the two controls read as family. */
+.opt-radio input {
+  accent-color: var(--brand);
+  width: 15px;
+  height: 15px;
+  flex: none;
+  margin: 0;
+  cursor: pointer;
+}
+
+/* ---------- theme picker ---------- */
+
+/* Three across, one button per palette. Swatch colors are the theme's identity
+   colors, inlined in popup.html so they stay put when the active theme moves. */
+.theme-picker {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 7px;
+}
+
+.theme-btn {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 6px 7px;
+  border: 1px solid var(--line-strong);
+  border-radius: var(--r-sm);
+  background: var(--surface-card);
+  color: var(--ink-muted);
+  font: 500 11.5px/1 var(--font-ui);
+  cursor: pointer;
+  transition: border-color var(--dur-1) var(--ease-3),
+    background var(--dur-1) var(--ease-3), color var(--dur-1) var(--ease-3);
+}
+
+.theme-btn:hover {
+  border-color: var(--ink-faint);
+  color: var(--ink);
+}
+
+.theme-btn:focus-visible {
+  outline: 2px solid var(--brand);
+  outline-offset: 2px;
+}
+
+.theme-btn[aria-pressed="true"] {
+  border-color: var(--brand);
+  background: var(--brand-tint);
+  color: var(--brand);
+}
+
+.theme-swatches {
+  display: flex;
+  gap: 3px;
+}
+
+.theme-swatches i {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  border: 1px solid var(--line);
+}
+
+/* The Appearance picker reuses the theme button, with an icon where the
+   palette buttons carry swatches. */
+.mode-btn svg {
+  width: 14px;
+  height: 14px;
+}
+
+/* The accent picker reuses it too: one color dot instead of three. "Theme"
+   (no explicit accent) carries the palette's own --brand, so the dot reads
+   true for whatever theme is active. */
+.accent-swatch {
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  border: 1px solid var(--line);
+  background: var(--brand);
+}
+
+/* ---------- buttons ---------- */
+
+.actions {
+  display: grid;
+  /* Two across, not three: at 360px a third column left ~57px for the label,
+     which wrapped "Keep earning" and "Stop batch" onto two lines. */
+  grid-template-columns: repeat(2, 1fr);
+  gap: 7px;
+  margin-top: 10px;
+}
+
+/* The Search button is a split button: the label half runs the batch, the
+   square gear half opens the search settings panel below. The button itself
+   drops its padding and gap (the halves carry their own), so the gear gets
+   a real slot of its own — as tall as the button, as wide as it is tall —
+   divided from the label by a hairline, not a badge floating on top. */
+#startSearchBtn {
+  padding: 0;
+  gap: 0;
+}
+
+/* The label half keeps the .btn look: same padding, same icon-to-label
+   gap, and it stretches so the label stays centered while the gear holds
+   the right edge. */
+.btn-search-main {
+  flex: 1;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  padding: 7px 9px;
+}
+
+/* The gear half: a span (HTML forbids nested buttons) with its own
+   keyboard path. Divider and hover states use the button's own ink (it
+   sits on the brand surface of .btn-primary), and its focus ring is inset
+   — .btn clips its children (the pointer-highlight ::after), so an
+   outline would be cut off at the edges. The button's rounded corners
+   shape the square zone's right edge for free. */
+.btn-gear {
+  align-self: stretch;
+  aspect-ratio: 1;
+  display: grid;
+  place-items: center;
+  padding: 0;
+  border: 0;
+  border-left: 1px solid color-mix(in srgb, var(--brand-ink) 35%, transparent);
+  background: transparent;
+  color: inherit;
+  cursor: pointer;
+  transition: background var(--dur-1) var(--ease-3),
+    box-shadow var(--dur-1) var(--ease-3);
+}
+
+.btn-gear svg {
+  width: 13px;
+  height: 13px;
+}
+
+.btn-gear:hover,
+.btn-gear:focus-visible,
+.btn-gear[aria-expanded="true"] {
+  background: color-mix(in srgb, var(--brand-ink) 14%, transparent);
+}
+
+.btn-gear[aria-expanded="true"] {
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--brand-ink) 40%, transparent);
+}
+
+.btn-gear:focus-visible {
+  box-shadow: inset 0 0 0 2px color-mix(in srgb, var(--brand-ink) 60%, transparent);
+}
+
+/* The search settings panel: the query sources, revealed by the gear. A
+   panel of the Run now card — never a card of its own, so the layout
+   editor cannot touch it. */
+.search-settings {
+  margin-top: 12px;
+  padding-top: 12px;
+  border-top: 1px solid var(--line);
+}
+
+.search-settings[hidden] {
+  display: none;
+}
+
+/* The panel's group label is the first thing under its top border, so it
+   needs none of the stand-off the Settings view's labels use. */
+.search-settings > .group-label:first-child {
+  margin-top: 0;
+}
+
+.btn {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  padding: 7px 9px;
+  overflow: hidden;
+  border: 1px solid var(--line-strong);
+  border-radius: var(--r-sm);
+  background: var(--surface-card);
+  color: var(--ink);
+  font: 500 12px/1.2 var(--font-ui);
+  cursor: pointer;
+  transition: background var(--dur-1) var(--ease-3),
+    border-color var(--dur-1) var(--ease-3), color var(--dur-1) var(--ease-3),
+    transform var(--dur-1) var(--ease-3), opacity var(--dur-2) var(--ease-3);
+}
+
+/* Highlight centred on the pointer; popup.js feeds it --px/--py. */
+.btn::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  opacity: 0;
+  background: radial-gradient(
+    110px circle at var(--px, 50%) var(--py, 50%),
+    currentColor,
+    transparent 65%
+  );
+  pointer-events: none;
+  transition: opacity var(--dur-2) var(--ease-3);
+}
+
+.btn:hover:not(:disabled)::after {
+  opacity: 0.07;
+}
+
+.btn svg {
+  width: 14px;
+  height: 14px;
+  flex: none;
+  opacity: 0.65;
+  transition: transform var(--dur-2) var(--ease-3);
+}
+
+.btn:hover:not(:disabled) {
+  background: var(--surface-hover);
+}
+
+.btn:active:not(:disabled) {
+  transform: scale(0.975);
+}
+
+.btn:focus-visible {
+  outline: 2px solid var(--brand);
+  outline-offset: 2px;
+}
+
+.btn:disabled {
+  opacity: 0.45;
+  cursor: default;
+}
+
+.btn-primary {
+  border-color: var(--brand);
+  background: var(--brand);
+  color: var(--brand-ink);
+}
+
+.btn-primary svg {
+  opacity: 0.85;
+}
+
+.btn-primary:hover:not(:disabled) {
+  background: var(--brand-hover);
+  border-color: var(--brand-hover);
+}
+
+/* The Coupons button (experimental): green while a stats read saw coupons
+   unapplied — the palette's own --ok, so it follows the theme — and plain
+   .btn:disabled gray once everything is applied. Gated into the layout by
+   html[data-experimental] (mirrored pre-paint by popup-boot.js), the
+   data-attr pattern again: .btn's display:inline-flex would beat [hidden]. */
+#couponBtn {
+  display: none;
+}
+
+html[data-experimental="on"] #couponBtn {
+  display: inline-flex;
+}
+
+.btn-coupon:not(:disabled) {
+  border-color: var(--ok);
+  background: var(--ok);
+  color: var(--brand-ink);
+}
+
+.btn-coupon:not(:disabled):hover {
+  border-color: color-mix(in srgb, var(--ok) 85%, black);
+  background: color-mix(in srgb, var(--ok) 85%, black);
+}
+
+.btn-primary:hover:not(:disabled) svg {
+  transform: rotate(-12deg);
+}
+
+.btn-stop {
+  border-color: transparent;
+  background: transparent;
+  color: var(--danger);
+}
+
+/* Own row, full width — shared by the Searches button (the popup's primary
+   action) and the Stop row below. */
+.btn-wide {
+  grid-column: 1 / -1;
+}
+
+/* Stop and the compact Clear tabs share the Run-now grid's last row as a
+   flex pair: Stop stretches (findable in a hurry), Clear tabs keeps to its
+   own content width. */
+.stop-row {
+  grid-column: 1 / -1;
+  display: flex;
+  gap: 7px;
+}
+
+/* The Run view's hero: the routine, bigger than its neighbors so the tab's
+   one obvious thing is obvious. */
+.btn-hero {
+  padding: 11px 9px;
+  font-size: 13px;
+}
+
+.btn-hero svg {
+  width: 16px;
+  height: 16px;
+}
+
+.stop-row .btn-stop {
+  flex: 1;
+}
+
+/* The compact Clear-tabs button riding the Stop row: smaller padding, type
+   and icon than its neighbors. */
+.btn-compact {
+  padding: 4px 8px;
+  font-size: 12px;
+}
+
+.btn-compact svg {
+  width: 12px;
+  height: 12px;
+}
+
+.btn-stop:hover:not(:disabled) {
+  background: var(--danger-tint);
+}
+
+.btn-quiet {
+  border-color: transparent;
+  background: transparent;
+  color: var(--ink-muted);
+}
+
+.btn-quiet:hover:not(:disabled) {
+  background: var(--surface-hover);
+  color: var(--ink);
+}
+
+/* Armed for confirmation. The nudge is the point: it should not look like the
+   click already went through. */
+.btn[data-armed="true"] {
+  border-color: color-mix(in srgb, var(--danger) 45%, transparent);
+  background: var(--danger-tint);
+  color: var(--danger);
+  animation: nudge-x 360ms var(--ease-out-3);
+}
+
+/* ---------- activity ---------- */
+
+.log {
+  margin: 8px 0 0;
+}
+
+.log-row {
+  display: grid;
+  grid-template-columns: 74px 1fr;
+  gap: 10px;
+  align-items: baseline;
+  padding: 6px 0;
+}
+
+.log-row + .log-row {
+  border-top: 1px solid var(--line);
+}
+
+.log-row:last-child {
+  padding-bottom: 0;
+}
+
+.log dt {
+  font-size: 11px;
+  color: var(--ink-muted);
+}
+
+.log dd {
+  margin: 0 -5px;
+  padding: 1px 5px;
+  border-radius: 5px;
+  font-size: 11.5px;
+  color: var(--ink);
+  overflow-wrap: anywhere;
+}
+
+.log dd.mono {
+  font-family: var(--font-mono);
+  font-size: 11px;
+}
+
+.log dd.is-empty {
+  color: var(--ink-faint);
+}
+
+.log dd[data-state="ok"] {
+  color: var(--ok);
+}
+
+.log dd[data-state="failed"] {
+  color: var(--danger);
+}
+
+/* A value arriving while the popup is open shouldn't change silently. */
+.log dd.is-fresh {
+  animation: wash 900ms var(--ease-out-3);
+}
+
+/* The dump rows (Stats, Redeem) are click-to-copy: the tooltip text is the
+   refinement lead and cannot be selected any other way. */
+.log dd.copy-on-click {
+  cursor: copy;
+}
+
+.log dd.copy-on-click:active {
+  filter: brightness(0.85);
+}
+
+@keyframes wash {
+  from {
+    background: var(--brand-tint);
+  }
+  to {
+    background: transparent;
+  }
+}
+
+/* ---------- stats ---------- */
+
+/* Eight label/value pairs in two columns — the settings-row convention of
+   label left, current value right, packed so the whole card stays short: it
+   sits between the fold and the Activity card. */
+.stats-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 2px 14px;
+  margin: 8px 0 0;
+}
+
+.stat {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 6px;
+  min-width: 0;
+  padding: 3px 0;
+}
+
+.stats-grid dt {
+  font-size: 11px;
+  color: var(--ink-muted);
+  white-space: nowrap;
+}
+
+.stats-grid dd {
+  margin: 0;
+  font-size: 11.5px;
+  color: var(--ink);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.stats-grid dd.is-empty {
+  color: var(--ink-faint);
+}
+
+/* Same fresh-flash contract as the log values below. */
+.stats-grid dd.is-fresh {
+  animation: wash 900ms var(--ease-out-3);
+}
+
+/* The head's Refresh button: .btn's padding is sized for the Run-now grid, so
+   this trims it to sit next to the title like the startup card's switch. */
+.btn-stats-refresh {
+  padding: 4px 8px;
+  font-size: 11.5px;
+}
+
+.btn-stats-refresh svg {
+  width: 12px;
+  height: 12px;
+}
+
+/* ---------- the Today view (ADR-019, reshaped by ADR-020) ---------- */
+
+/* The hero row: the ring on the left, the balance on the right. The ring
+   carries the search-points pair; the balance is the one number the popup
+   is opened for, one size up from the card title, tabular so a re-read
+   doesn't reflow the label. */
+.today-hero {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  margin-top: 8px;
+}
+
+.today-hero-stats {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+}
+
+.today-hero-label {
+  font-size: 11px;
+  color: var(--ink-muted);
+}
+
+.today-hero-value {
+  font-size: 26px;
+  font-weight: 600;
+  line-height: 1.15;
+  letter-spacing: -0.02em;
+  color: var(--ink);
+  font-variant-numeric: tabular-nums;
+}
+
+.today-hero-value.is-empty {
+  color: var(--ink-faint);
+}
+
+/* Same fresh-flash contract as the stat values. */
+.today-hero-value.is-fresh {
+  animation: wash 900ms var(--ease-out-3);
+}
+
+/* The earned-today delta under the balance: the history's first-to-last
+   movement of the local day. Can be negative (a redeem) — that's honest,
+   not an error, so it stays muted ink rather than turning red. */
+.today-earned {
+  font-size: 11px;
+  color: var(--ink-muted);
+  font-variant-numeric: tabular-nums;
+}
+
+.today-earned:empty {
+  display: none;
+}
+
+/* The progress ring: the search-points cap as a stroke arc. The SVG is
+   rotated -90° so the fill starts at 12 o'clock; the circumference (2πr,
+   r=36) is the dasharray, and popup.js sets the dashoffset from the pair. */
+.today-ring {
+  position: relative;
+  flex: none;
+  width: 84px;
+  height: 84px;
+}
+
+.today-ring svg {
+  width: 100%;
+  height: 100%;
+  transform: rotate(-90deg);
+}
+
+.ring-track {
+  fill: none;
+  stroke: color-mix(in srgb, var(--brand) 14%, transparent);
+  stroke-width: 7;
+}
+
+.ring-fill {
+  fill: none;
+  stroke: var(--brand);
+  stroke-width: 7;
+  stroke-linecap: round;
+  stroke-dasharray: 226.2;
+  stroke-dashoffset: var(--ring-offset, 226.2);
+  transition: stroke-dashoffset var(--dur-3) var(--ease-out-3),
+    stroke var(--dur-2) var(--ease-3);
+}
+
+/* The cap met: the ring's job is done, so it says so in the ok color. */
+.ring-fill.is-done {
+  stroke: var(--ok);
+}
+
+.ring-center {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 1px;
+}
+
+.ring-value {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--ink);
+  font-variant-numeric: tabular-nums;
+}
+
+.ring-value.is-empty {
+  color: var(--ink-faint);
+}
+
+.ring-label {
+  font-size: 8.5px;
+  font-weight: 600;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  color: var(--ink-faint);
+}
+
+/* The goal card: a target's progress bar, in the earn bar's old clothes.
+   The empty state is just the note — the Edit button (or the Redeem view's
+   "Set as goal") is the way out of it. */
+.goal-block {
+  margin-top: 11px;
+  padding-top: 10px;
+  border-top: 1px solid var(--line);
+}
+
+.goal-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.goal-head .group-label {
+  margin: 0;
+}
+
+.goal-progress {
+  margin-top: 4px;
+}
+
+/* Flex and grid would beat the UA's [hidden] — the codebase's standing
+   override, same precedent as .banner[hidden]. */
+.goal-progress[hidden],
+.goal-edit[hidden] {
+  display: none;
+}
+
+.goal-line {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px;
+  font-size: 11px;
+}
+
+.goal-balance {
+  font-weight: 600;
+  color: var(--ink);
+  font-variant-numeric: tabular-nums;
+}
+
+.goal-target {
+  color: var(--ink-faint);
+  font-variant-numeric: tabular-nums;
+}
+
+.goal-bar {
+  height: 6px;
+  margin-top: 5px;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--brand) 14%, transparent);
+  overflow: hidden;
+}
+
+.goal-fill {
+  display: block;
+  height: 100%;
+  width: var(--fill, 0%);
+  border-radius: inherit;
+  background: var(--brand);
+  transition: width var(--dur-2) var(--ease-out-3);
+}
+
+/* Goal reached: the ok color, like the ring and the old earn bar. */
+.goal-fill.is-done {
+  background: var(--ok);
+}
+
+.goal-edit {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  margin-top: 8px;
+}
+
+.goal-edit .input-wrap {
+  flex: 1;
+}
+
+/* The sparkline: the history's per-day deltas as one polyline. preserve-
+   aspect-ratio none stretches it to the card's width; non-scaling-stroke
+   keeps the line weight fixed under that stretch. */
+.spark-block {
+  margin-top: 11px;
+  padding-top: 10px;
+  border-top: 1px solid var(--line);
+}
+
+.spark-block[hidden] {
+  display: none;
+}
+
+.spark {
+  display: block;
+  width: 100%;
+  height: 48px;
+  margin-top: 2px;
+}
+
+.spark polyline {
+  fill: none;
+  stroke: var(--brand);
+  stroke-width: 2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  vector-effect: non-scaling-stroke;
+}
+
+/* The streak chips: label and value in one pill, wrapping to as many rows
+   as the four need. */
+.chip-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 5px;
+  margin-top: 6px;
+}
+
+.chip {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 5px;
+  padding: 4px 9px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: var(--surface-sunken);
+}
+
+.chip-name {
+  font-size: 10.5px;
+  color: var(--ink-muted);
+  white-space: nowrap;
+}
+
+.chip-value {
+  font-size: 11px;
+  color: var(--ink);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.chip-value.is-empty {
+  color: var(--ink-faint);
+}
+
+/* Same fresh-flash contract as the stat values. */
+.chip-value.is-fresh {
+  animation: wash 900ms var(--ease-out-3);
+}
+
+/* The plan preview: label/value rows in the stats-grid convention, but with
+   the verdict on the right able to run longer, so it ellipsizes instead of
+   wrapping. */
+.plan-block {
+  margin-top: 10px;
+}
+
+.plan-block[hidden] {
+  display: none;
+}
+
+.plan-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.plan-step {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 3px 0;
+}
+
+.plan-title {
+  flex: none;
+  font-size: 11.5px;
+  font-weight: 500;
+  color: var(--ink);
+  white-space: nowrap;
+}
+
+.plan-verdict {
+  min-width: 0;
+  font-size: 11px;
+  color: var(--ink-muted);
+  text-align: right;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* A step that would be skipped: dimmed both halves, the verdict carries the
+   skip's own wording ("already 3/3"). */
+.plan-step.is-skip .plan-title {
+  color: var(--ink-muted);
+}
+
+.plan-step.is-skip .plan-verdict {
+  color: var(--ink-faint);
+}
+
+/* A block of opt rows inside a card's body (the Redeem card's restock
+   watcher) — separated from the note above it. */
+.opts-card {
+  margin-top: 10px;
+}
+
+/* ---------- motion opt-outs ---------- */
+
+/* A measurement freeze that must not disturb an in-flight transition.
+   Animations are deliberately left running: canceling them mid-flight (and
+   restarting them when the class goes away) made every card flash to opacity 0
+   and replay its rise animation. */
+html.measuring *,
+html.measuring *::before,
+html.measuring *::after {
+  transition: none !important;
+}
+
+html[data-anim="off"] *,
+html[data-anim="off"] *::before,
+html[data-anim="off"] *::after {
+  animation: none !important;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation: none !important;
+    transition-duration: 1ms !important;
+  }
+}

@@ -34,3 +34,4 @@ tasks/
 # so re-include the whole tree) ---
 !src2/**
 !src3/**
+!src4/**

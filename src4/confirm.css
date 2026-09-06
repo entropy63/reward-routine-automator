@@ -1,0 +1,234 @@
+/* Bing Search Automator — routine confirm dialog
+ *
+ * A companion to popup.css, not a customer of it: linking popup.css would
+ * drag its popup-only layout rules (the 360px body, the clamped height) into
+ * a window they were never sized for. So the token layer below is the same
+ * definitions popup.css uses, copied — keep the two in step when a palette
+ * changes. data-theme on <html> picks the palette (geist | primer |
+ * catppuccin, default geist); light-dark() pairs make light/dark follow the
+ * OS by default, and html[data-mode] pins an explicit Appearance choice (the
+ * popup's second theme axis). Both attributes come from confirm-boot.js
+ * pre-paint and confirm.js once storage answers.
+ */
+
+:root {
+  --font-ui: "Segoe UI Variable Text", "Segoe UI", system-ui, ui-sans-serif,
+    -apple-system, sans-serif;
+  --font-mono: ui-monospace, "Cascadia Mono", "SF Mono", Consolas, monospace;
+
+  /* Geist — light-dark() pairs, same values as popup.css. */
+  --surface-app: light-dark(#ffffff, #0a0a0a);
+  --surface-card: light-dark(#ffffff, #111111);
+  --surface-sunken: light-dark(#fafafa, #171717);
+  --surface-hover: light-dark(#fafafa, #1a1a1a);
+  --line: light-dark(#eaeaea, #262626);
+  --line-strong: light-dark(#d4d4d4, #333333);
+  --ink: light-dark(#171717, #ededed);
+  --ink-muted: light-dark(#666666, #a1a1a1);
+  --ink-faint: light-dark(#999999, #666666);
+
+  --brand: light-dark(#0070f3, #3291ff);
+  --brand-hover: light-dark(#0061d5, #4c9dff);
+  --brand-ink: light-dark(#ffffff, #0a0a0a);
+  --brand-tint: light-dark(#eaf3fe, #101e2f);
+  --danger: light-dark(#e5484d, #ff4d4d);
+  --danger-tint: light-dark(#fdecec, #2a0f0f);
+  --ok: light-dark(#0f8a4d, #0abf53);
+
+  --r-sm: 5px;
+  --r-md: 6px;
+  --r-lg: 8px;
+
+  /* Open Props easings (MIT) — only the handful actually used here. */
+  --ease-3: cubic-bezier(0.25, 0, 0.3, 1);
+  --ease-out-3: cubic-bezier(0, 0, 0.3, 1);
+
+  --dur-1: 120ms;
+  --dur-2: 180ms;
+
+  /* light dark = follow the OS ("auto" in the Appearance picker); the
+     html[data-mode] rules below pin an explicit choice. Same as popup.css. */
+  color-scheme: light dark;
+}
+
+/* The Appearance picker: an explicit choice overrides the OS for this
+   dialog. No attribute (auto) leaves color-scheme at the :root default. */
+html[data-mode="light"] {
+  color-scheme: light;
+}
+
+html[data-mode="dark"] {
+  color-scheme: dark;
+}
+
+/* Primer (GitHub) */
+[data-theme="primer"] {
+  --surface-app: light-dark(#ffffff, #0d1117);
+  --surface-card: light-dark(#ffffff, #151b23);
+  --surface-sunken: light-dark(#f6f8fa, #0d1117);
+  --surface-hover: light-dark(#eff2f5, #212830);
+  --line: light-dark(#d1d9e0, #3d444d);
+  --line-strong: light-dark(#818b98, #656c76);
+  --ink: light-dark(#1f2328, #f0f6fc);
+  --ink-muted: light-dark(#59636e, #9198a1);
+  --ink-faint: light-dark(#818b98, #656c76);
+
+  --brand: light-dark(#0969da, #1f6feb);
+  --brand-hover: light-dark(#0550ae, #388bfd);
+  --brand-ink: #ffffff;
+  --brand-tint: light-dark(#ddf4ff, #121d2f);
+  --danger: light-dark(#cf222e, #ff7b72);
+  --danger-tint: light-dark(#ffebe9, #25171c);
+  --ok: light-dark(#1a7f37, #3fb950);
+
+  --r-sm: 6px;
+  --r-md: 6px;
+  --r-lg: 8px;
+}
+
+/* Catppuccin (Latte / Mocha) */
+[data-theme="catppuccin"] {
+  --surface-app: light-dark(#e6e9ef, #181825);
+  --surface-card: light-dark(#eff1f5, #1e1e2e);
+  --surface-sunken: light-dark(#dce0e8, #11111b);
+  --surface-hover: light-dark(#dce0e8, #262640);
+  --line: light-dark(#ccd0da, #313244);
+  --line-strong: light-dark(#bcc0cc, #45475a);
+  --ink: light-dark(#4c4f69, #cdd6f4);
+  --ink-muted: light-dark(#6c6f85, #a6adc8);
+  --ink-faint: light-dark(#7c7f93, #7f849c);
+
+  --brand: light-dark(#1e66f5, #89b4fa);
+  --brand-hover: light-dark(#1a5ad8, #9cbdfb);
+  --brand-ink: light-dark(#eff1f5, #11111b);
+  --brand-tint: light-dark(#dae3f5, #2b3047);
+  --danger: light-dark(#d20f39, #f38ba8);
+  --danger-tint: light-dark(#ecdae2, #382b3c);
+  --ok: light-dark(#40a02b, #a6e3a1);
+
+  --r-sm: 8px;
+  --r-md: 10px;
+  --r-lg: 14px;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  background: var(--surface-app);
+  color: var(--ink);
+  font: 400 13px/1.45 var(--font-ui);
+  -webkit-font-smoothing: antialiased;
+}
+
+/* The window is sized by the background (420x220 outer, title bar included);
+   centering the content vertically absorbs whatever that leaves over. */
+.dialog {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: 10px;
+  min-height: 100vh;
+  padding: 16px 20px;
+}
+
+.head {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+}
+
+/* The popup's identity glyph, as-is: same box, same lightning bolt. */
+.glyph {
+  display: grid;
+  place-items: center;
+  width: 28px;
+  height: 28px;
+  flex: none;
+  border-radius: var(--r-md);
+  background: var(--brand-tint);
+  color: var(--brand);
+  border: 1px solid var(--line);
+}
+
+.glyph svg {
+  width: 15px;
+  height: 15px;
+}
+
+h1 {
+  margin: 0;
+  font-size: 13px;
+  font-weight: 600;
+  letter-spacing: -0.005em;
+}
+
+.message {
+  margin: 0;
+}
+
+/* tabular-nums so the ticking digits don't reflow the line. */
+.countdown {
+  margin: 0;
+  color: var(--ink-muted);
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+}
+
+.actions {
+  display: flex;
+  gap: 8px;
+  margin-top: 4px;
+}
+
+/* The popup's buttons, minus the pointer-tracking highlight (no --px/--py
+   feed here — the plain hover states carry it). */
+.btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  flex: 1;
+  padding: 7px 9px;
+  border: 1px solid var(--line-strong);
+  border-radius: var(--r-sm);
+  background: var(--surface-card);
+  color: var(--ink);
+  font: 500 12px/1.2 var(--font-ui);
+  cursor: pointer;
+  transition: background var(--dur-1) var(--ease-3),
+    border-color var(--dur-1) var(--ease-3), color var(--dur-1) var(--ease-3),
+    transform var(--dur-1) var(--ease-3), opacity var(--dur-2) var(--ease-3);
+}
+
+.btn:hover:not(:disabled) {
+  background: var(--surface-hover);
+}
+
+.btn:active:not(:disabled) {
+  transform: scale(0.975);
+}
+
+.btn:focus-visible {
+  outline: 2px solid var(--brand);
+  outline-offset: 2px;
+}
+
+/* The double-click guard sets this from confirm.js. */
+.btn:disabled {
+  opacity: 0.45;
+  cursor: default;
+}
+
+.btn-primary {
+  border-color: var(--brand);
+  background: var(--brand);
+  color: var(--brand-ink);
+}
+
+.btn-primary:hover:not(:disabled) {
+  background: var(--brand-hover);
+  border-color: var(--brand-hover);
+}
