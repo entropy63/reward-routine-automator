@@ -1494,6 +1494,7 @@ async function startSearchBatch() {
   });
 
   startKeepAlive();
+  startQueryPrefetch(); // the first search types without waiting on the chain
   tick(); // deliberately not awaited: the batch outlives this call
 }
 
@@ -1727,7 +1728,7 @@ async function tick() {
     await waitForTabComplete(tabId);
     if (await isStale(runId)) return;
 
-    const { query, api } = await nextQuery();
+    const { query, api } = await awaitedQuery();
     await chrome.storage.local.set({ lastQuery: { api, text: query } });
 
     let busyMs = 0;
@@ -1741,6 +1742,11 @@ async function tick() {
     } catch (e) {
       console.warn("Search injection failed:", e);
     }
+
+    // The typing is done and the tab is navigating; the NEXT query's
+    // fetch chain (storage + up to four network calls) fills the idle
+    // delay window instead of gating the next keystroke.
+    startQueryPrefetch();
 
     if (await isStale(runId)) return;
 
@@ -5814,14 +5820,21 @@ async function fetchGoogleTrendsQuery() {
   if ((cached && cached.day) !== today || !titles.length) {
     const geos = Number(today.slice(8)) % 2 === 0 ? ["US", "GB"] : ["GB", "CA"];
 
-    titles = [];
-    for (const geo of geos) {
+    // Both geos at once (2026-09-06, performance): these are independent
+    // endpoints, so the cache-miss day pays one round trip, not two.
+    // Promise.all preserves geo order, and any failure still throws before
+    // anything is stored — the cache stays absent and the next query
+    // retries, exactly the old semantics.
+    const docs = await Promise.all(geos.map(async geo => {
       const res = await fetchWithTimeout(
         `https://trends.google.com/trending/rss?geo=${geo}`
       );
       if (!res.ok) throw new Error(`HTTP ${res.status} for geo ${geo}`);
+      return new DOMParser().parseFromString(await res.text(), "application/xml");
+    }));
 
-      const doc = new DOMParser().parseFromString(await res.text(), "application/xml");
+    titles = [];
+    for (const doc of docs) {
       for (const item of doc.querySelectorAll("item > title")) {
         titles.push(trimQuery(item.textContent));
       }
@@ -5938,6 +5951,40 @@ async function nextQuery() {
   });
 
   return chosen;
+}
+
+// The next query, prefetched (2026-09-06, performance): fetching a query is
+// storage reads plus up to four sequential network calls, and it used to run
+// ON the critical path — after the tab loaded, before the first keystroke,
+// the batch paid the whole chain's latency every search, only to then idle
+// through a 5-15s inter-search delay. The prefetch starts when the current
+// search is done (and at batch start), fills that idle window, and the next
+// tick consumes it warm. Module-level state, so an evicted worker just
+// forgets it and the next tick fetches cold — the old behavior, not worse.
+let nextQueryPrefetch = null;
+
+function startQueryPrefetch() {
+  if (nextQueryPrefetch) return; // one in flight is all a batch can use
+  const pending = nextQuery();
+  // The consumer handles the real error; this only silences the "never
+  // consumed" case (batch finished, worker evicted) that would otherwise
+  // surface as an unhandled rejection.
+  pending.catch(() => {});
+  nextQueryPrefetch = pending;
+}
+
+// The warm query if the prefetch produced one, the cold fetch otherwise.
+async function awaitedQuery() {
+  if (nextQueryPrefetch) {
+    const pending = nextQueryPrefetch;
+    nextQueryPrefetch = null;
+    try {
+      return await pending;
+    } catch (e) {
+      console.warn("Prefetched query failed, fetching fresh:", e);
+    }
+  }
+  return nextQuery();
 }
 
 function randomDelayMillis(minSec, maxSec) {

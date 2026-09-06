@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "Reward Routine Automator",
-  "version": "2.1.15",
+  "version": "2.1.16",
   "description": "Automatically perform Bing searches with realistic typing and dynamic intervals, and open daily sets on the Rewards dashboard.",
   "permissions": [
     "tabs",
