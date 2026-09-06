@@ -8,12 +8,14 @@
 //   queries/*            the query sources and the prefetched chain
 //   steps/search.js      the search batch + verification loop
 //   steps/routine.js     the startup sequence and its tail
-//   steps/reads.js       the Stage-2 dashboard-reader seam
+//   readers/*            the dashboard reads (stats, redeem, claim, sections)
+//   injections/*         the page-side halves, ported verbatim from src/
+//   images/*             the random-image visual search
 //
 // Registered as a module service worker ("type": "module", Chrome 91+), so
 // the whole worker is real ES imports — no bundler, no globals-as-modules.
 
-import { stopAllActivity } from "./lib/run-state.js";
+import { stopAllActivity, readRunState } from "./lib/run-state.js";
 import { DEFAULT_SETTINGS } from "./lib/settings.js";
 import { cancelBeats, SEARCH_ALARM } from "./lib/alarms.js";
 import { recordOpenedTab, clearAllTabs } from "./lib/tabs.js";
@@ -22,8 +24,19 @@ import { tick, startSearchBatch } from "./steps/search.js";
 import {
   runStartupSequence,
   answerRoutineConfirm,
-  routineConfirmWindowRemoved
+  routineConfirmWindowRemoved,
+  routineSummaryQuery,
+  routineSkippedQuery
 } from "./steps/routine.js";
+import { refreshStats } from "./readers/stats.js";
+import { checkRedeemAvailability, redeemOverwatchCoins } from "./readers/redeem.js";
+import { runManualClaim } from "./readers/claim.js";
+import {
+  openDailySetOnRewardsDashboard,
+  openKeepEarningActivities
+} from "./readers/rewards-section.js";
+import { claimCoupons } from "./readers/coupons.js";
+import { runRandomImageSearch } from "./images/image-search.js";
 
 const LAST_ROUTINE_DAY = "lastRoutineDay";
 
@@ -83,6 +96,47 @@ async function handleMessage(message) {
     case "START_SEARCH_BATCH":
       await startSearchBatch();
       return { ok: true };
+    case "RUN_DAILY_SET":
+      // Long-running; don't hold the popup's callback open for it.
+      openDailySetOnRewardsDashboard();
+      return { ok: true };
+    case "RUN_KEEP_EARNING":
+      openKeepEarningActivities();
+      return { ok: true };
+    case "RUN_CLAIM":
+      // Long-running; don't hold the popup's callback open for it.
+      runManualClaim();
+      return { ok: true };
+    case "REFRESH_STATS":
+      // Same fire-and-forget reasoning as the daily set: worst case the read
+      // waits out a slow dashboard for ~30s, longer than the popup's response
+      // channel should be held open. The popup learns the outcome from
+      // lastStats instead.
+      refreshStats();
+      return { ok: true };
+    case "REFRESH_REDEEM":
+      // Same fire-and-forget reasoning as REFRESH_STATS above: the watch can
+      // wait out a slow redeem page for well over the popup's patience. The
+      // popup learns the outcome from lastRedeem instead.
+      checkRedeemAvailability();
+      return { ok: true };
+    case "REDEEM_OVERWATCH":
+      // The popup's Redeem button: a user-initiated spend, so unlike the
+      // watch above this is NOT background — the tab opens foreground where
+      // the user watches their own transaction. Fire-and-forget like the
+      // other manual runs: the outcome is the page the user is looking at.
+      redeemOverwatchCoins(message.url, message.label);
+      return { ok: true };
+    case "CLAIM_COUPONS":
+      // Experimental (Settings → Experimental features): the popup's
+      // Coupons button. Foreground for the same reason as the redeem button
+      // — the coupon panel is the user's own to watch — and fire-and-forget
+      // the same way: the outcome is the page the user is looking at.
+      claimCoupons();
+      return { ok: true };
+    case "RUN_IMAGE_SEARCH":
+      runRandomImageSearch();
+      return { ok: true };
     case "STOP_BATCH":
       // Cancel the schedule first so no late beat races the stop write; the
       // write then takes down the batch, the routine, the verification loop,
@@ -90,6 +144,31 @@ async function handleMessage(message) {
       // tabs stay open, and lastRoutineDay is never written by a stop.
       cancelBeats();
       await stopAllActivity();
+      return { ok: true };
+    case "OPEN_ROUTINE_DONE":
+      // Developer Option only (2026-09-04): the popup's routine-done opener —
+      // same page, same summary, as the genuine endRoutine call, so the
+      // preview is the real thing. The extra dev=1 flag turns on the page's
+      // own preview bar (one button per render condition); endRoutine never
+      // sets it, so a real finish still opens the honest page. Fire-and-
+      // forget: the outcome is the page itself.
+      try {
+        const summary = await routineSummaryQuery();
+        // Whatever skip list is still stored joins the preview (a finished
+        // routine's list was consumed by its own endRoutine — usually empty
+        // here, and honest when it isn't).
+        const state = await readRunState();
+        const params = new URLSearchParams({ dev: "1" });
+        if (summary) params.set("q", summary);
+        const skippedQuery = routineSkippedQuery(state.routine && state.routine.skipped);
+        if (skippedQuery) params.set("s", skippedQuery);
+        await chrome.tabs.create({
+          url: `routine-done.html?${params.toString()}`,
+          active: true
+        });
+      } catch (e) {
+        console.warn("Could not open the routine-done page:", e);
+      }
       return { ok: true };
     case "CLEAR_ALL_TABS":
       return await clearAllTabs(message.windowId);

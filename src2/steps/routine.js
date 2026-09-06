@@ -4,12 +4,6 @@
 // one field of the run-state document rather than four storage keys — a stop
 // clears all of it in the single stop write, and endRoutine consumes it
 // atomically via consumeRoutine().
-//
-// Stage note: the dashboard readers (claim, daily set, keep earning, image
-// search) are Stage 2's port. Their steps exist here with stub runners so
-// the sequence machinery — order, verdicts, tail, sweep — is complete and
-// testable now; each stub warns once and resolves, exactly like a step whose
-// page did not load.
 
 import { localDayKey } from "../lib/day.js";
 import { getSettings, DEFAULT_SETTINGS } from "../lib/settings.js";
@@ -22,6 +16,12 @@ import { slotMissingDefaults } from "../pure/orders.js";
 import { STEP_DONE_CHECKS, statsAreCurrent, stepSkipReason } from "../pure/verdicts.js";
 import { refreshStats, checkRedeemAvailability } from "./reads.js";
 import { startSearchBatch } from "./search.js";
+import { runStartupClaim } from "../readers/claim.js";
+import {
+  openDailySetOnRewardsDashboard,
+  openKeepEarningActivities
+} from "../readers/rewards-section.js";
+import { runRandomImageSearch } from "../images/image-search.js";
 
 const LAST_ROUTINE_DAY = "lastRoutineDay";
 const LAST_STATS = "lastStats";
@@ -34,15 +34,6 @@ const ROUTINE_CONFIRM_TIMEOUT_MS = 15000;
 const ROUTINE_DONE_URL = "routine-done.html";
 
 // ---------- The step registry ----------
-
-const notPortedWarnings = new Set();
-function notPorted(id) {
-  if (!notPortedWarnings.has(id)) {
-    notPortedWarnings.add(id);
-    console.warn(`routine: step "${id}" is not ported yet (Stage 2).`);
-  }
-  return Promise.resolve();
-}
 
 // The startup steps, keyed by the ids stored in settings.startupOrder.
 // popup.html mirrors these ids in each row's data-step attribute.
@@ -57,15 +48,15 @@ const STARTUP_STEPS = {
   },
   claim: {
     enabledKey: "claimStartupEnabled",
-    run: () => notPorted("claim")
+    run: () => runStartupClaim()
   },
   dailySet: {
     enabledKey: "dailySetStartupEnabled",
-    run: () => notPorted("dailySet")
+    run: () => openDailySetOnRewardsDashboard()
   },
   keepEarning: {
     enabledKey: "keepEarningStartupEnabled",
-    run: () => notPorted("keepEarning")
+    run: () => openKeepEarningActivities()
   },
   search: {
     enabledKey: "searchStartupEnabled",
@@ -73,7 +64,7 @@ const STARTUP_STEPS = {
   },
   imageSearch: {
     enabledKey: "imageSearchStartupEnabled",
-    run: () => notPorted("imageSearch")
+    run: () => runRandomImageSearch()
   }
 };
 
@@ -238,7 +229,7 @@ export function routineConfirmWindowRemoved(windowId) {
 // complete" only when a read actually answered, not because a value went
 // missing. Returns "" when every answered streak is done — a query-less page
 // is the plain "The daily routine finished."
-async function routineSummaryQuery() {
+export async function routineSummaryQuery() {
   return chrome.storage.local.get(LAST_STATS).then(({ [LAST_STATS]: stats }) => {
     const activities = (stats && stats.activities) || {};
     const parts = [];

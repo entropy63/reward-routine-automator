@@ -24,6 +24,9 @@ export const DEFAULT_SETTINGS = {
   // churn the dashboard, and claim before the others so pending points land
   // early.
   startupOrder: ["stats", "claim", "dailySet", "keepEarning", "search", "imageSearch"],
+  // Order of the popup's cards (keys into the data-section attributes in
+  // popup.html); the popup reorders this by drag in layout edit mode.
+  sectionOrder: ["runNow", "stats", "redeem", "activity"], // popup.js only
   querySourceOrder: ["bingAutosuggest", "googleTrends", "wikipedia", "uselessFacts", "local"],
   searchesPerBatch: 30,            // How many searches per batch
   // Right-size the batch to the day's remaining search points (ADR-016 §7):
@@ -48,6 +51,17 @@ export const DEFAULT_SETTINGS = {
   keepPinnedTabs: true,            // Never close a tab the user pinned
   dailySetMaxTiles: 3,
   keepEarningMaxTiles: 0,          // 0 = however many are there today
+
+  // Everything below is read by popup.js only; the worker stores it and
+  // never interprets it.
+  animationsEnabled: true,         // Popup motion
+  theme: "geist",                  // Popup palette
+  appearance: "auto",              // light/dark/auto (ADR-003)
+  refreshStatsOnPopupOpen: true,   // Re-read the stats + redeem on popup open
+  popupHeight: 0,                  // 240–600, Chromium's cap; 0 = auto fold
+  hiddenSections: [],              // Cards hidden via the layout editor's ×
+  developerOptionsEnabled: false,  // The Activity card's gate
+  experimentalFeatures: false      // The Coupons button's gate
 };
 
 export async function getSettings() {
