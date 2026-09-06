@@ -1661,6 +1661,91 @@ html[data-experimental="on"] #couponBtn {
   grid-template-columns: 1fr;
 }
 
+/* ---------- the search-points earn bar (3.1) ---------- */
+
+/* The day's cap drawn to scale under the value it summarizes: the fill width
+   is the --fill percentage renderStats sets; a complete pair turns it the
+   success green the plan's done verdicts use. */
+.stat-bar {
+  display: block;
+  height: 4px;
+  margin-top: 4px;
+  border-radius: 2px;
+  background: var(--brand-tint);
+  overflow: hidden;
+}
+
+/* display:block above would defeat the hidden attribute without this. */
+.stat-bar[hidden] {
+  display: none;
+}
+
+.stat-bar-fill {
+  display: block;
+  height: 100%;
+  width: var(--fill, 0%);
+  border-radius: inherit;
+  background: var(--brand);
+  transition: width var(--dur-2) var(--ease-out-3);
+}
+
+.stat-bar.is-done .stat-bar-fill {
+  background: var(--ok);
+}
+
+/* ---------- Today's plan (3.1) ---------- */
+
+/* The routine's own verdict, per step, as a two-end row: the chore on the
+   left, its today-verdict on the right. Done rows fade like the finish
+   page's skip list — the things that went right get the faint ink. */
+#planBlock {
+  margin-top: 10px;
+}
+
+.plan-list {
+  list-style: none;
+  margin: 4px 0 0;
+  padding: 0;
+  display: grid;
+  gap: 3px;
+}
+
+.plan-list li {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 10px;
+  font-size: 11.5px;
+}
+
+.plan-title {
+  color: var(--ink);
+  white-space: nowrap;
+}
+
+.plan-verdict {
+  color: var(--ink-muted);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.plan-list li.is-done .plan-title {
+  color: var(--ink-muted);
+}
+
+.plan-verdict.is-done {
+  color: var(--ok);
+}
+
+/* The .opts list was built for the Settings view's cards; inside the Redeem
+   card it follows a note, so it gets the breathing room the view's card-head
+   would otherwise provide. */
+.opts-card {
+  margin-top: 8px;
+}
+
 /* The head's Refresh button: .btn's padding is sized for the Run-now grid, so
    this trims it to sit next to the title like the startup card's switch. */
 .btn-stats-refresh {

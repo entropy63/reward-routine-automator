@@ -11,7 +11,7 @@ test("a null Earn read never erases the dashboard's finds", () => {
       readyToClaim: "0",
       dailyStreak: "Day 4",
       stampBonus: "11/12",
-      searchPoints: "40 of 60",
+      searchPoints: "40/60",
       activities: { bingSearch: "1/1", dailySet: "2/3" }
     },
     null
@@ -19,7 +19,7 @@ test("a null Earn read never erases the dashboard's finds", () => {
   assert.equal(merged.availablePoints, "5,113");
   assert.equal(merged.dailyStreak, "Day 4");
   assert.equal(merged.stampBonus, "11/12");
-  assert.equal(merged.searchPoints, "40 of 60");
+  assert.equal(merged.searchPoints, "40/60");
   assert.equal(merged.activities.bingSearch, "1/1");
   assert.equal(merged.activities.dailySet, "2/3");
 });

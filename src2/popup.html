@@ -456,9 +456,15 @@
             <dt>Stamp bonus</dt>
             <dd id="statStampBonus" class="is-empty">—</dd>
           </div>
-          <div class="stat">
+          <div class="stat stat-search">
             <dt>Search points</dt>
             <dd id="statSearchPoints" class="is-empty">—</dd>
+            <!-- The day's earn bar: the dd's "40 of 60" drawn to scale. Hidden
+                 unless the value carries a readable X/Y pair (renderStats
+                 fills --fill as a percentage). -->
+            <span class="stat-bar" id="searchPointsBar" hidden>
+              <span class="stat-bar-fill"></span>
+            </span>
           </div>
         </dl>
         <!-- The four activity streaks in their own sub-section: each shows both
@@ -485,6 +491,16 @@
               <dd id="statVisualSearch" class="is-empty">—</dd>
             </div>
           </dl>
+        </div>
+        <!-- Today's plan: what the startup routine would do RIGHT NOW, computed
+             by the same verdicts the routine itself runs (popup.js imports
+             pure/plan.js). The stats read is the input, so it lives in this
+             card; the stats step itself is a read, not a chore, and stays out.
+             renderPlan() fills the rows and hides the block when the read is
+             not from today (the verdicts refuse to judge a stale read). -->
+        <div id="planBlock" hidden>
+          <p class="group-label">Left today</p>
+          <ul class="plan-list" id="planList"></ul>
         </div>
         <p class="note" id="statsUpdated">Not yet updated</p>
       </section>
@@ -545,6 +561,23 @@
           </button>
         </div>
         <p class="note" id="redeemNote">Refresh in Stats reads your points and the amounts.</p>
+        <!-- The restock watcher (3.1): the redeem watch re-checked on a
+             background alarm, so the banners above stay fresh without opening
+             the popup. Opt-in — it opens a background tab each round. -->
+        <div class="opts opts-card">
+          <label class="opt">
+            <span class="opt-text">
+              Watch for restocks
+              <span class="note">Re-check the redeem page every 2 hours; banner the flips.</span>
+            </span>
+            <span class="switch switch-sm">
+              <input type="checkbox" id="restockWatcherEnabled" />
+              <span class="switch-track" aria-hidden="true">
+                <span class="switch-thumb"></span>
+              </span>
+            </span>
+          </label>
+        </div>
       </section>
 
       <!-- Below the fold on purpose: the popup is clamped to this card's top
@@ -1228,6 +1261,6 @@
       </section>
     </main>
 
-    <script src="popup.js"></script>
+    <script type="module" src="popup.js"></script>
   </body>
 </html>

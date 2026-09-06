@@ -1,3 +1,11 @@
+// The popup shares the routine's own verdict code (ADR-018): the "Left
+// today" plan and the search-points earn bar are computed by the same pure
+// functions the worker runs, so what the popup says can never drift from
+// what the routine would actually do. A module script for exactly this
+// import; popup-boot.js stays classic (it must run before the first paint).
+import { routinePlan } from "./pure/plan.js";
+import { progressPair, rightSizedCount, statsAreCurrent } from "./pure/verdicts.js";
+
 document.addEventListener("DOMContentLoaded", async () => {
   // Canonical step ids in default order — mirrors STARTUP_STEPS in background.js.
   const STEP_IDS = ["stats", "claim", "dailySet", "keepEarning", "search", "imageSearch"];
@@ -135,6 +143,13 @@ document.addEventListener("DOMContentLoaded", async () => {
   // picker (renderRedeem) is their only home now.
   const refreshStatsBtn = document.getElementById("refreshStatsBtn");
   const statsUpdatedEl = document.getElementById("statsUpdated");
+  // Today's plan (the Stats card's verdict block) and the earn bar under the
+  // search-points value.
+  const planBlock = document.getElementById("planBlock");
+  const planList = document.getElementById("planList");
+  const searchPointsBar = document.getElementById("searchPointsBar");
+  // The restock watcher's toggle (the Redeem card).
+  const restockWatcherToggle = document.getElementById("restockWatcherEnabled");
   const redeemSelect = document.getElementById("redeemVariant");
   const redeemBtn = document.getElementById("redeemBtn");
   const redeemBtnLabelEl = document.getElementById("redeemBtnLabel");
@@ -171,7 +186,11 @@ document.addEventListener("DOMContentLoaded", async () => {
   // each instance owns its own drag/settle state, so the lists never interact.
   const startupOrderList = makeSortableList(stepList, {
     idKey: "step",
-    save: order => patchSettings({ startupOrder: order })
+    save: order => {
+      patchSettings({ startupOrder: order });
+      // The plan follows the configured order — re-derive it.
+      renderPlan(lastStatsSeen);
+    }
   });
   const querySourceList = makeSortableList(sourceList, {
     idKey: "source",
@@ -260,6 +279,7 @@ document.addEventListener("DOMContentLoaded", async () => {
   refreshOnOpenToggle.checked = effectiveSettings.refreshStatsOnPopupOpen ?? true;
   devToggle.checked = effectiveSettings.developerOptionsEnabled ?? false;
   experimentalToggle.checked = effectiveSettings.experimentalFeatures ?? false;
+  restockWatcherToggle.checked = effectiveSettings.restockWatcherEnabled ?? false;
 
   // Unknown ids are dropped and duplicates collapse by construction (the
   // filter walks SECTION_IDS, not the stored list); the hide order is kept.
@@ -384,6 +404,8 @@ document.addEventListener("DOMContentLoaded", async () => {
       const step = input.closest(".step");
       if (step) replay(step.querySelector(".step-index"), "is-pop");
       patchSettings({ [key]: input.checked });
+      // A step leaving or joining the plan changes the plan.
+      renderPlan(lastStatsSeen);
     });
   });
 
@@ -1183,6 +1205,8 @@ document.addEventListener("DOMContentLoaded", async () => {
   for (const radio of [searchModeManual, searchModeAutomatic]) {
     radio.addEventListener("change", () => {
       patchSettings({ rightSizeSearchBatch: searchModeAutomatic.checked });
+      // The search verdict's wording depends on the mode.
+      renderPlan(lastStatsSeen);
     });
   }
 
@@ -1272,6 +1296,15 @@ document.addEventListener("DOMContentLoaded", async () => {
     sendRun({ type: "REDEEM_OVERWATCH", url: redeemUrl, label: chosen.value }, () => {
       redeemNoteEl.textContent = "Opening the redeem page…";
     });
+  });
+
+  // The restock watcher's toggle: persist first, then tell the worker to
+  // (re)schedule its alarm from the stored setting — awaited so the worker's
+  // read cannot race the write. The banners the watch feeds are the popup's
+  // own renderers, so nothing else needs doing here.
+  restockWatcherToggle.addEventListener("change", async () => {
+    await patchSettings({ restockWatcherEnabled: restockWatcherToggle.checked });
+    chrome.runtime.sendMessage({ type: "SET_RESTOCK_WATCH" }).catch(() => {});
   });
 
   // ---------- clear tabs ----------
@@ -1588,6 +1621,20 @@ document.addEventListener("DOMContentLoaded", async () => {
       bingAppBanner.title =
         "This one only counts from the Bing phone app — the routine can't finish it for you.";
     }
+    // The day's earn bar under the value: "40 of 60" drawn to scale. No
+    // readable pair (stale read, empty value) leaves it hidden.
+    const pair = progressPair(stats.searchPoints);
+    if (pair && pair[1] > 0) {
+      searchPointsBar.hidden = false;
+      searchPointsBar.style.setProperty(
+        "--fill",
+        `${Math.min(100, Math.round((pair[0] / pair[1]) * 100))}%`
+      );
+      searchPointsBar.classList.toggle("is-done", pair[0] >= pair[1]);
+    } else {
+      searchPointsBar.hidden = true;
+    }
+    renderPlan(stats);
     // The banner pushes every card down, so the fold moves with it.
     syncHeight();
 
@@ -1603,6 +1650,69 @@ document.addEventListener("DOMContentLoaded", async () => {
     // half of it just changed — re-run the verdict (the amounts half comes
     // from lastRedeem, unchanged here).
     updateRedeemButton();
+  }
+
+  // ---------- Today's plan ----------
+  //
+  // What the startup routine would do RIGHT NOW, computed by the routine's
+  // own verdicts (pure/plan.js) — the popup shows the plan the routine would
+  // execute, not a re-implementation of it. Shown from a fresh read only: a
+  // stale one cannot judge "done today" and every unknown runs, which would
+  // read as "everything to do" and lie. The stats step is the read itself,
+  // not a chore; disabled steps never reach the routine — both stay out.
+
+  const PLAN_STEP_TITLES = {
+    claim: "Claim",
+    dailySet: "Daily set",
+    keepEarning: "Keep earning",
+    search: "Web searches",
+    imageSearch: "Image search"
+  };
+
+  function renderPlan(stats) {
+    if (!statsAreCurrent(stats)) {
+      planBlock.hidden = true;
+      return;
+    }
+
+    const order = startupOrderList.currentOrder().filter(id => {
+      if (id === "stats") return false;
+      const input = document.getElementById(ENABLED_KEY[id]);
+      return input ? input.checked : true;
+    });
+    const plan = routinePlan(stats, order);
+
+    planList.replaceChildren(
+      ...plan.map(({ id, willRun, reason }) => {
+        const li = document.createElement("li");
+        if (!willRun) li.classList.add("is-done");
+
+        const title = document.createElement("span");
+        title.className = "plan-title";
+        title.textContent = PLAN_STEP_TITLES[id] || id;
+
+        const verdict = document.createElement("span");
+        verdict.className = "plan-verdict";
+        if (!willRun) {
+          verdict.classList.add("is-done");
+          verdict.textContent = `✓ ${reason}`;
+        } else if (id === "search" && searchModeAutomatic.checked) {
+          // The one step whose remaining work is a number, and only in
+          // automatic mode — the same right-sizing the batch itself
+          // would apply.
+          const sized = rightSizedCount(stats, Number(searchesInput.value) || 30);
+          verdict.textContent = sized.trimmed
+            ? `${sized.count} ${sized.count === 1 ? "search" : "searches"} to the cap`
+            : "to do";
+        } else {
+          verdict.textContent = "to do";
+        }
+
+        li.append(title, verdict);
+        return li;
+      })
+    );
+    planBlock.hidden = plan.length === 0;
   }
 
   // The Redeem card's half of the lastRedeem read (the Overwatch amounts no

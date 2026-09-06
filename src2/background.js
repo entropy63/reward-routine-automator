@@ -16,8 +16,13 @@
 // the whole worker is real ES imports — no bundler, no globals-as-modules.
 
 import { stopAllActivity, readRunState } from "./lib/run-state.js";
-import { DEFAULT_SETTINGS } from "./lib/settings.js";
-import { cancelBeats, SEARCH_ALARM } from "./lib/alarms.js";
+import { DEFAULT_SETTINGS, getSettings } from "./lib/settings.js";
+import {
+  cancelBeats,
+  SEARCH_ALARM,
+  REDEEM_WATCH_ALARM,
+  REDEEM_WATCH_PERIOD_MIN
+} from "./lib/alarms.js";
 import { recordOpenedTab, clearAllTabs } from "./lib/tabs.js";
 import { setLastTabAction } from "./lib/log.js";
 import { tick, startSearchBatch } from "./steps/search.js";
@@ -51,17 +56,38 @@ chrome.runtime.onInstalled.addListener(async () => {
     settings: { ...DEFAULT_SETTINGS, ...(existing.settings || {}) }
   });
   await chrome.storage.local.remove("runState");
+  await syncRedeemWatch();
 });
 
 // The startup sequence: whatever order settings.startupOrder holds.
 chrome.runtime.onStartup.addListener(async () => {
+  // The restock alarm persists across browser restarts, but a browser that
+  // was closed mid-toggle (or an alarm Chrome dropped) gets re-synced here —
+  // the stored setting is the truth either way.
+  await syncRedeemWatch();
   await runStartupSequence();
 });
 
-// Revive an interrupted batch (also fires on the normal schedule).
+// Revive an interrupted batch (also fires on the normal schedule); the
+// restock watcher rides the same event with its own alarm name.
 chrome.alarms.onAlarm.addListener(alarm => {
   if (alarm.name === SEARCH_ALARM) tick();
+  else if (alarm.name === REDEEM_WATCH_ALARM) checkRedeemAvailability();
 });
+
+// Schedule or cancel the restock watch to match the stored setting. One
+// place, three callers (install, startup, the popup's toggle) — so the
+// alarm can never disagree with the setting for long.
+async function syncRedeemWatch() {
+  const settings = await getSettings();
+  if (settings.restockWatcherEnabled) {
+    chrome.alarms.create(REDEEM_WATCH_ALARM, {
+      periodInMinutes: REDEEM_WATCH_PERIOD_MIN
+    });
+  } else {
+    chrome.alarms.clear(REDEEM_WATCH_ALARM);
+  }
+}
 
 // Tab capture: tabs opened while a step is capturing belong to that step.
 chrome.tabs.onCreated.addListener(tab => {
@@ -180,6 +206,13 @@ async function handleMessage(message) {
       // will re-mark its day when it finishes — it did run).
       await chrome.storage.local.remove(LAST_ROUTINE_DAY);
       await setLastTabAction("Dev — routine will run on the next browser start", true);
+      return { ok: true };
+    case "SET_RESTOCK_WATCH":
+      // The Redeem card's restock toggle: reschedule (or cancel) the periodic
+      // watch from the setting the popup just wrote. The watch itself is the
+      // existing redeem reader — guarded against overlap, tabs closed by the
+      // reader — and its flips land in the banners the popup already renders.
+      await syncRedeemWatch();
       return { ok: true };
     case "routineConfirmAnswer":
       // The routine's confirm dialog reporting its buttons.

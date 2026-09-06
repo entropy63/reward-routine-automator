@@ -52,6 +52,11 @@ export const DEFAULT_SETTINGS = {
   dailySetMaxTiles: 3,
   keepEarningMaxTiles: 0,          // 0 = however many are there today
 
+  // The restock watcher (3.1): re-run the redeem watch on a background
+  // alarm so the restock/sold-out banners stay fresh without the popup.
+  // Opt-in — each round opens a background tab.
+  restockWatcherEnabled: false,
+
   // Everything below is read by popup.js only; the worker stores it and
   // never interprets it.
   animationsEnabled: true,         // Popup motion

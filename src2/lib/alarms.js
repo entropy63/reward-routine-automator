@@ -16,6 +16,12 @@ export const SEARCH_ALARM = "searchTick";
 const WATCHDOG_PAD_MS = 15000; // alarm fires after the timer, as a backstop
 const MIN_ALARM_MINUTES = 0.5; // chrome.alarms' own floor
 
+// The restock watcher (3.1): a plain repeating alarm — no timer, no pad; the
+// reader it wakes is idempotent and self-guarding (READ_RUN_GUARDS refuses
+// an overlapping burst), so a late or doubled fire costs nothing.
+export const REDEEM_WATCH_ALARM = "redeemWatch";
+export const REDEEM_WATCH_PERIOD_MIN = 120;
+
 let beatTimer = null;
 
 // Schedules one beat of the search loop. The fire callback is handed in by
