@@ -7,6 +7,13 @@ node_modules/
 test-results/
 .playwright-mcp/
 .playwright-report/
+docs/
+scripts/
+tests/
+tasks/
+package.json
+package-lock.json
+playwright.config.js
 
 # --- live Bing page captures (contain real account data) ---
 *.html
