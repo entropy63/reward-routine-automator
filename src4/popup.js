@@ -235,8 +235,10 @@ document.addEventListener("DOMContentLoaded", async () => {
   let hiddenSections = [];
   // The points history (ADR-020): one {day, first, last, at} per local day,
   // recorded by the stats read. The popup only renders from it — the writes
-  // belong to the read.
-  let history = Array.isArray(pointsHistory) ? pointsHistory : [];
+  // belong to the read. Empty at declaration: the storage read below is
+  // awaited later in this same block, and reading it here would be the TDZ
+  // crash this whole section exists to prevent.
+  let history = [];
   // The redeem goal (ADR-020), in points; 0 = no goal. Declared here for the
   // same TDZ reason: the goal renders run during init.
   let redeemGoalPts = 0;
@@ -280,6 +282,10 @@ document.addEventListener("DOMContentLoaded", async () => {
   ]);
 
   const effectiveSettings = settings || {};
+  // The history read's answer lands here now that the await above has
+  // resolved — the one assignment this state could never take at
+  // declaration (the TDZ crash this section guards against).
+  history = Array.isArray(pointsHistory) ? pointsHistory : [];
   // Default off (user request 2026-09-03); a stored true always wins.
   startupToggle.checked = effectiveSettings.startupEnabled ?? false;
   oncePerDayToggle.checked = effectiveSettings.startupOncePerDay ?? true;

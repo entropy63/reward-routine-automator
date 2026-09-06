@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "the meow",
-  "version": "5.0.0",
+  "version": "5.0.1",
   "description": "Automatically perform Bing searches with realistic typing and dynamic intervals, and open daily sets on the Rewards dashboard.",
   "permissions": [
     "tabs",
