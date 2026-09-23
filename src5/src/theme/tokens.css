@@ -1,0 +1,118 @@
+/* Design tokens — two independent axes plus semantic + shape tokens.
+ *
+ *   data-appearance  ("light" | "dark")  → the neutral ramp (bg/surface/text).
+ *                    "auto" is resolved to light/dark in JS (hooks/useTheme),
+ *                    so this file only ever needs the two concrete ramps.
+ *   data-theme       ("catppuccin" | "geist" | "primer" | "nord" | "dracula" |
+ *                     "tokyo" | "gruvbox" | "rose") → the accent hue.
+ *                    catppuccin is the default and keeps the build's cyan brand;
+ *                    a non-empty settings.accentColor overrides --accent inline.
+ *
+ * Kept as CSS variables so every component reads one name and the two axes
+ * compose without a combinatorial explosion of selectors. */
+
+:root {
+  /* shape + type */
+  --r-sm: 8px;
+  --r-md: 12px;
+  --r-lg: 18px;
+  --r-xl: 24px;
+  --r-full: 999px;
+  --font: 14px/1.5 system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+  --mono: 12px/1.5 ui-monospace, 'SF Mono', 'Cascadia Mono', Menlo, monospace;
+
+  /* status (readable on either ramp) */
+  --ok: #10b981;
+  --bad: #ef4444;
+  --warn: #f59e0b;
+  --info: #3b82f6;
+
+  /* accent axis — default = "the zoomies" cyan (catppuccin) */
+  --accent: #06b6d4;
+  --accent-2: #22d3ee;
+  --accent-ink: #04212a;
+
+  /* neutral ramp — DARK by default (matches the scaffold) */
+  --bg: #0b0b12;
+  --bg-2: #0e0e18;
+  --surface: #14141f;
+  --surface-2: #191926;
+  --elevated: #1f1f30;
+  --text: #e6e6f0;
+  --text-dim: #9aa0b4;
+  --text-faint: #666b83;
+  --line: #23233a;
+  --line-soft: #1b1b2b;
+  --shadow: 0 10px 34px rgba(0, 0, 0, 0.5);
+  --ring-track: #23233a;
+  --overlay: rgba(6, 8, 16, 0.66);
+  color-scheme: dark;
+}
+
+/* ---- appearance: light ---- */
+html[data-appearance='light'] {
+  --bg: #f5f6fb;
+  --bg-2: #eceef6;
+  --surface: #ffffff;
+  --surface-2: #f4f5fa;
+  --elevated: #ffffff;
+  --text: #171826;
+  --text-dim: #59607a;
+  --text-faint: #949ab2;
+  --line: #e3e6ef;
+  --line-soft: #eef0f6;
+  --shadow: 0 10px 30px rgba(24, 26, 48, 0.12);
+  --ring-track: #e3e6ef;
+  --overlay: rgba(30, 34, 54, 0.4);
+  color-scheme: light;
+}
+
+/* ---- theme axis: accent hue (applies in both appearances) ---- */
+html[data-theme='geist'] {
+  --accent: #0070f3;
+  --accent-2: #3291ff;
+  --accent-ink: #ffffff;
+}
+html[data-theme='primer'] {
+  --accent: #2f81f7;
+  --accent-2: #58a6ff;
+  --accent-ink: #ffffff;
+}
+/* The classic ported-everywhere palettes — accent pairs straight from their
+ * official color sets, ink = each palette's own dark base so accent-filled
+ * controls stay readable. */
+html[data-theme='nord'] {
+  --accent: #88c0d0; /* nord8 "frost" */
+  --accent-2: #8fbcbb; /* nord7 */
+  --accent-ink: #2e3440; /* nord0 */
+}
+html[data-theme='dracula'] {
+  --accent: #bd93f9; /* purple */
+  --accent-2: #ff79c6; /* pink */
+  --accent-ink: #282a36; /* background */
+}
+html[data-theme='tokyo'] {
+  --accent: #7aa2f7; /* blue */
+  --accent-2: #bb9af7; /* purple */
+  --accent-ink: #1a1b26; /* base */
+}
+html[data-theme='gruvbox'] {
+  --accent: #fe8019; /* orange */
+  --accent-2: #fabd2f; /* yellow */
+  --accent-ink: #282828; /* bg0 */
+}
+html[data-theme='rose'] {
+  --accent: #ebbcba; /* rose */
+  --accent-2: #c4a7e7; /* iris */
+  --accent-ink: #191724; /* base */
+}
+/* catppuccin = the default cyan declared in :root — no override needed. */
+
+* {
+  box-sizing: border-box;
+}
+html,
+body {
+  margin: 0;
+  padding: 0;
+}

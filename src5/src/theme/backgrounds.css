@@ -1,0 +1,809 @@
+/* Backdrop styles, shared by the popup AND the worker-opened pages
+ * (confirm / routine-done render the same Background component). Palette +
+ * shape come from tokens.css; the components that paint the animated and
+ * interactive ones live in popup/fx/ (AuroraBackground, BeamsBackground,
+ * StarsBackground, WavesBackground, MeteorsBackground, BubblesBackground,
+ * SnowBackground, RainBackground, RippleBackground, OrbitBackground,
+ * FirefliesBackground, BokehBackground, CursorGlowBackground,
+ * ParticlesBackground, ParallaxBackground, ConstellationBackground) and the
+ * dispatcher is popup/fx/Background.tsx, keyed by the settings.background
+ * value; the rest are CSS-only layers declared below. */
+
+/* ---------- shared layer ---------- */
+.bg {
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  overflow: hidden;
+  pointer-events: none;
+  /* The brightness knob (Settings → Appearance): set on <html> by useTheme /
+   * applyTheme as a plain number, with 1 as the as-drawn default. */
+  filter: brightness(var(--bg-brightness, 1));
+}
+.bg--static,
+.bg--static::before,
+.bg--static::after,
+.bg--static .wave,
+.bg--static .meteor,
+.bg--static .bubble,
+.bg--static .flake,
+.bg--static .drop,
+.bg--static .ring,
+.bg--static .orbit {
+  animation: none;
+}
+/* The falling/rising particle styles start their elements at opacity 0 (the
+ * keyframes fade them in), so a frozen animation would paint nothing. Give
+ * each a visible at-rest pose instead: the field freezes in place. */
+.bg--static .bubble {
+  opacity: 0.4;
+}
+.bg--static .flake {
+  opacity: 0.55;
+}
+.bg--static .drop {
+  opacity: 0.35;
+}
+.bg--static .ring {
+  opacity: 0;
+}
+.bg--static .ring:first-child {
+  opacity: 0.16;
+  transform: scale(0.55);
+}
+
+/* ---------- aurora (fx/AuroraBackground.tsx) ---------- */
+.aurora {
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  overflow: hidden;
+  pointer-events: none;
+  /* Same brightness knob as .bg (this style paints its own layer class). */
+  filter: brightness(var(--bg-brightness, 1));
+}
+.aurora-blob {
+  position: absolute;
+  width: 280px;
+  height: 280px;
+  border-radius: 50%;
+  filter: blur(64px);
+  opacity: 0.5;
+  will-change: transform;
+}
+html[data-appearance='light'] .aurora-blob {
+  opacity: 0.3;
+}
+.aurora-blob--1 {
+  background: var(--accent);
+  top: -100px;
+  left: -70px;
+  animation: drift1 15s ease-in-out infinite alternate;
+}
+.aurora-blob--2 {
+  background: var(--accent-2);
+  top: 120px;
+  right: -90px;
+  animation: drift2 19s ease-in-out infinite alternate;
+}
+.aurora-blob--3 {
+  background: #8b5cf6;
+  bottom: -130px;
+  left: 40px;
+  animation: drift3 17s ease-in-out infinite alternate;
+}
+.aurora--static .aurora-blob {
+  animation: none;
+}
+
+/* ---------- beams (fx/BeamsBackground.tsx) ---------- */
+/* Light traveling along curved SVG paths. The dash (70px of glow, then a long
+ * gap) slides along each path; per-path durations and negative delays
+ * desynchronize them so they never sync up. */
+.bg--beams svg {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+}
+.bg--beams path {
+  fill: none;
+  stroke: color-mix(in srgb, var(--accent) 65%, transparent);
+  stroke-width: 1.6;
+  stroke-linecap: round;
+  stroke-dasharray: 70 1000;
+  filter: drop-shadow(0 0 3px color-mix(in srgb, var(--accent) 55%, transparent));
+  animation: beamFlow 8s linear infinite;
+}
+.bg--beams path:nth-child(2) {
+  animation-duration: 11s;
+  animation-delay: -3.2s;
+}
+.bg--beams path:nth-child(3) {
+  animation-duration: 9s;
+  animation-delay: -6.1s;
+}
+.bg--beams path:nth-child(4) {
+  animation-duration: 12s;
+  animation-delay: -1.7s;
+}
+.bg--beams path:nth-child(5) {
+  animation-duration: 10s;
+  animation-delay: -4.8s;
+}
+
+/* ---------- stars (fx/StarsBackground.tsx) ---------- */
+/* The particle field's individual glows — the component animates them via
+ * framer-motion; this just paints each one. */
+.bg--stars .star {
+  position: absolute;
+  border-radius: 50%;
+  background: var(--accent);
+  box-shadow: 0 0 6px color-mix(in srgb, var(--accent) 70%, transparent);
+}
+html[data-appearance='light'] .bg--stars .star {
+  background: color-mix(in srgb, var(--accent) 75%, #fff);
+}
+
+/* ---------- waves (fx/WavesBackground.tsx) ---------- */
+/* Two periodic wave layers sliding horizontally in opposite directions — the
+ * front one faster, which reads as parallax. Each svg is 200% wide with a
+ * path whose period divides 50%, so the -50% slide loops seamlessly. */
+.bg--waves .wave {
+  position: absolute;
+  left: 0;
+  bottom: -2px;
+  width: 200%;
+  height: 170px;
+}
+.bg--waves .wave path {
+  fill: color-mix(in srgb, var(--accent) 9%, transparent);
+}
+.bg--waves .wave--back {
+  animation: waveSlide 14s linear infinite;
+}
+.bg--waves .wave--front {
+  animation: waveSlide 9s linear infinite reverse;
+}
+.bg--waves .wave--front path {
+  fill: color-mix(in srgb, var(--accent) 13%, transparent);
+}
+
+/* ---------- meteors (fx/MeteorsBackground.tsx) ---------- */
+/* Falling streaks: tilted bars whose bright end leads down-left. Each meteor
+ * is visible for only ~a fifth of its loop, so the sky stays mostly quiet. */
+.bg--meteors .meteor {
+  position: absolute;
+  top: -15%;
+  width: 1.5px;
+  height: 84px;
+  border-radius: var(--r-full);
+  background: linear-gradient(180deg, transparent, color-mix(in srgb, var(--accent) 78%, transparent));
+  transform: translate(0, 0) rotate(-32deg);
+  opacity: 0;
+  animation: meteorFall 7s linear infinite;
+}
+@keyframes meteorFall {
+  0% {
+    transform: translate(0, 0) rotate(-32deg);
+    opacity: 0;
+  }
+  4% {
+    opacity: 1;
+  }
+  18% {
+    opacity: 1;
+  }
+  26%,
+  100% {
+    transform: translate(-140px, 240px) rotate(-32deg);
+    opacity: 0;
+  }
+}
+
+/* ---------- retro — a synthwave floor ---------- */
+/* A line grid laid back in perspective under a soft horizon glow, scrolling
+ * toward the viewer. */
+.bg--retro {
+  background: radial-gradient(62% 42% at 50% 0%, color-mix(in srgb, var(--accent) 15%, transparent), transparent 72%);
+}
+.bg--retro::before {
+  content: '';
+  position: absolute;
+  left: -60%;
+  right: -60%;
+  top: 44%;
+  bottom: -20%;
+  background-image: linear-gradient(color-mix(in srgb, var(--accent) 40%, transparent) 1.5px, transparent 1.5px),
+    linear-gradient(90deg, color-mix(in srgb, var(--accent) 40%, transparent) 1.5px, transparent 1.5px);
+  background-size: 44px 44px;
+  transform: perspective(320px) rotateX(62deg);
+  transform-origin: top center;
+  animation: retroScroll 2.6s linear infinite;
+}
+html[data-appearance='light'] .bg--retro::before {
+  background-image: linear-gradient(color-mix(in srgb, var(--text-faint) 55%, transparent) 1.5px, transparent 1.5px),
+    linear-gradient(90deg, color-mix(in srgb, var(--text-faint) 55%, transparent) 1.5px, transparent 1.5px);
+}
+
+/* ---------- dots — a fine dot matrix ---------- */
+/* Dots with a slow accent sheen drifting across them. */
+.bg--dots {
+  background-image: radial-gradient(color-mix(in srgb, var(--text-faint) 55%, transparent) 1px, transparent 1.2px);
+  background-size: 17px 17px;
+}
+.bg--dots::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: radial-gradient(34% 30% at 30% 24%, color-mix(in srgb, var(--accent) 20%, transparent), transparent 72%);
+  animation: dotDrift 16s ease-in-out infinite alternate;
+}
+
+/* ---------- rays — god rays from the top ---------- */
+/* A masked repeating-conic gradient on an oversized layer, rotating very
+ * slowly so the beams sweep like light through blinds. */
+.bg--rays::before {
+  content: '';
+  position: absolute;
+  left: -50%;
+  top: -110%;
+  width: 200%;
+  height: 260%;
+  background: repeating-conic-gradient(
+    from 0deg at 50% 25%,
+    transparent 0deg 11deg,
+    color-mix(in srgb, var(--accent) 12%, transparent) 13deg 15deg,
+    transparent 17deg 26deg
+  );
+  -webkit-mask-image: radial-gradient(62% 52% at 50% 22%, #000, transparent 78%);
+  mask-image: radial-gradient(62% 52% at 50% 22%, #000, transparent 78%);
+  animation: raysSpin 70s linear infinite;
+}
+
+/* ---------- noise — film grain ---------- */
+/* A soft accent wash under an SVG-turbulence grain that jitters in discrete
+ * steps (the classic CSS grain trick — steps() so it snaps, not drifts). */
+.bg--noise {
+  background: radial-gradient(80% 60% at 50% 0%, color-mix(in srgb, var(--accent) 12%, transparent), transparent 70%);
+}
+.bg--noise::before {
+  content: '';
+  position: absolute;
+  inset: -100%;
+  background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.8' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+  opacity: 0.05;
+  animation: noiseJitter 8s steps(10) infinite;
+}
+
+/* ---------- mesh — fixed radial stops ---------- */
+/* A calm, "designed" gradient that reads as intentional without any motion. */
+.bg--mesh {
+  background:
+    radial-gradient(52% 46% at 12% 0%, color-mix(in srgb, var(--accent) 26%, transparent), transparent 70%),
+    radial-gradient(46% 44% at 100% 6%, color-mix(in srgb, var(--accent-2) 22%, transparent), transparent 68%),
+    radial-gradient(60% 55% at 80% 100%, color-mix(in srgb, #8b5cf6 20%, transparent), transparent 72%);
+}
+html[data-appearance='light'] .bg--mesh {
+  opacity: 0.55;
+}
+
+/* ---------- grid — a faint line grid under a top vignette ---------- */
+/* The mask fades the lines out toward the bottom so the content area stays
+ * clean. */
+.bg--grid {
+  background:
+    radial-gradient(62% 50% at 50% -8%, color-mix(in srgb, var(--accent) 22%, transparent), transparent 62%),
+    linear-gradient(color-mix(in srgb, var(--text-faint) 26%, transparent) 1px, transparent 1px),
+    linear-gradient(90deg, color-mix(in srgb, var(--text-faint) 26%, transparent) 1px, transparent 1px);
+  background-size: 100% 100%, 26px 26px, 26px 26px;
+  -webkit-mask-image: linear-gradient(180deg, #000 0%, #000 42%, transparent 92%);
+  mask-image: linear-gradient(180deg, #000 0%, #000 42%, transparent 92%);
+}
+
+/* ---------- glow — one breathing top glow ---------- */
+.bg--glow {
+  background: radial-gradient(70% 48% at 50% -6%, color-mix(in srgb, var(--accent) 30%, transparent), transparent 66%);
+  animation: glowPulse 9s ease-in-out infinite;
+}
+
+/* ---------- bubbles (fx/BubblesBackground.tsx) ---------- */
+/* Soft translucent orbs rising with a sway baked into the keyframe. They fade
+ * out near the top of the loop, so the fixed -620px travel covers both the
+ * popup and the full worker pages without ever showing a hard edge. */
+.bg--bubbles .bubble {
+  position: absolute;
+  border-radius: 50%;
+  background: radial-gradient(
+    circle at 32% 30%,
+    color-mix(in srgb, var(--accent) 30%, transparent),
+    color-mix(in srgb, var(--accent) 7%, transparent) 62%,
+    transparent
+  );
+  border: 1px solid color-mix(in srgb, var(--accent) 26%, transparent);
+  opacity: 0;
+  animation: bubbleRise 11s linear infinite;
+}
+
+/* ---------- snow (fx/SnowBackground.tsx) ---------- */
+/* White in dark mode, ink-tinted in light; each flake's sideways drift comes
+ * from its inline --drift variable. */
+.bg--snow .flake {
+  position: absolute;
+  border-radius: 50%;
+  background: #fff;
+  opacity: 0;
+  animation: snowFall 9s linear infinite;
+}
+html[data-appearance='light'] .bg--snow .flake {
+  background: color-mix(in srgb, var(--text-faint) 75%, #fff);
+}
+
+/* ---------- rain (fx/RainBackground.tsx) ---------- */
+/* Fast thin streaks with a slight diagonal. */
+.bg--rain .drop {
+  position: absolute;
+  width: 1px;
+  height: 46px;
+  border-radius: var(--r-full);
+  background: linear-gradient(180deg, transparent, color-mix(in srgb, var(--accent) 55%, transparent));
+  opacity: 0;
+  animation: rainFall 1s linear infinite;
+}
+
+/* ---------- ripple (fx/RippleBackground.tsx) ---------- */
+/* Concentric rings expanding from a point above center, like rain on water. */
+.bg--ripple .ring {
+  position: absolute;
+  left: 50%;
+  top: 42%;
+  width: 240px;
+  height: 240px;
+  margin: -120px 0 0 -120px;
+  border-radius: 50%;
+  border: 1.5px solid color-mix(in srgb, var(--accent) 42%, transparent);
+  opacity: 0;
+  animation: rippleExpand 5.4s ease-out infinite;
+}
+
+/* ---------- orbit (fx/OrbitBackground.tsx) ---------- */
+/* Spinning dashed rings with a glowing dot pinned at each ring's top edge. */
+.bg--orbit .orbit {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  border-radius: 50%;
+  border: 1px dashed color-mix(in srgb, var(--text-faint) 34%, transparent);
+  animation: orbitSpin 16s linear infinite;
+}
+.bg--orbit .orbit-dot {
+  position: absolute;
+  top: -3.5px;
+  left: 50%;
+  width: 7px;
+  height: 7px;
+  margin-left: -3.5px;
+  border-radius: 50%;
+  background: var(--accent);
+  box-shadow: 0 0 8px color-mix(in srgb, var(--accent) 80%, transparent);
+}
+
+/* ---------- fireflies (fx/FirefliesBackground.tsx) ---------- */
+/* The wandering is framer-motion in the component; this paints each warm
+ * glow with a soft double halo. */
+.bg--fireflies .fly {
+  position: absolute;
+  border-radius: 50%;
+  background: color-mix(in srgb, var(--accent-2) 85%, #fff 15%);
+  box-shadow: 0 0 10px color-mix(in srgb, var(--accent-2) 75%, transparent),
+    0 0 22px color-mix(in srgb, var(--accent) 45%, transparent);
+}
+
+/* ---------- bokeh (fx/BokehBackground.tsx) ---------- */
+/* Large blurred circles panning slowly along per-orb --dx/--dy vectors,
+ * mirroring back so they never leave. */
+.bg--bokeh .orb {
+  position: absolute;
+  border-radius: 50%;
+  filter: blur(22px);
+  opacity: 0.45;
+  animation: bokehDrift 18s ease-in-out infinite alternate;
+}
+html[data-appearance='light'] .bg--bokeh .orb {
+  opacity: 0.3;
+}
+.bg--bokeh .orb--accent {
+  background: var(--accent);
+}
+.bg--bokeh .orb--accent-2 {
+  background: var(--accent-2);
+}
+.bg--bokeh .orb--violet {
+  background: #8b5cf6;
+}
+
+/* ---------- swirl — a slow rotating conic wash ---------- */
+/* An oversized blurred conic gradient, masked to a soft disc, turning like
+ * colored liquid in a glass. */
+.bg--swirl::before {
+  content: '';
+  position: absolute;
+  left: -60%;
+  top: -60%;
+  width: 220%;
+  height: 220%;
+  background: conic-gradient(
+    from 0deg,
+    transparent 0deg,
+    color-mix(in srgb, var(--accent) 22%, transparent) 50deg,
+    transparent 110deg,
+    color-mix(in srgb, var(--accent-2) 18%, transparent) 180deg,
+    transparent 250deg,
+    color-mix(in srgb, var(--accent) 14%, transparent) 310deg,
+    transparent 350deg
+  );
+  filter: blur(36px);
+  -webkit-mask-image: radial-gradient(52% 52% at 50% 50%, #000, transparent 72%);
+  mask-image: radial-gradient(52% 52% at 50% 50%, #000, transparent 72%);
+  animation: swirlSpin 44s linear infinite;
+}
+html[data-appearance='light'] .bg--swirl::before {
+  opacity: 0.55;
+}
+
+/* ---------- spotlight — a searching beam ---------- */
+/* One soft cone pivoting back and forth from above the top edge, like a
+ * searchlight sweeping the frame. */
+.bg--spotlight::before {
+  content: '';
+  position: absolute;
+  left: 50%;
+  top: -42%;
+  width: 46%;
+  height: 190%;
+  margin-left: -23%;
+  background: linear-gradient(180deg, color-mix(in srgb, var(--accent) 32%, transparent), transparent 76%);
+  filter: blur(26px);
+  transform-origin: 50% 0;
+  animation: spotlightSweep 13s ease-in-out infinite alternate;
+}
+
+/* ---------- stripes — a scrolling diagonal pinstripe ---------- */
+/* The 19.8px shift is the -45deg tile period along X, so the loop is
+ * seamless. */
+.bg--stripes {
+  background-image: repeating-linear-gradient(
+    -45deg,
+    color-mix(in srgb, var(--text-faint) 32%, transparent) 0 1px,
+    transparent 1px 14px
+  );
+  animation: stripesScroll 5s linear infinite;
+}
+
+/* ---------- checker — a still checkerboard ---------- */
+/* The classic conic checkerboard, masked to a soft disc so it fades out. */
+.bg--checker {
+  background: conic-gradient(
+      color-mix(in srgb, var(--text-faint) 24%, transparent) 0 25%,
+      transparent 0 50%,
+      color-mix(in srgb, var(--text-faint) 24%, transparent) 0 75%,
+      transparent 0
+    )
+    0 0 / 26px 26px;
+  -webkit-mask-image: radial-gradient(72% 62% at 50% 38%, #000, transparent 86%);
+  mask-image: radial-gradient(72% 62% at 50% 38%, #000, transparent 86%);
+}
+
+/* ---------- hex — a still hexagon lattice ---------- */
+/* A stroked hexagon per tile in a neutral gray (a data-URI can't read the
+ * theme's custom properties), tinted by the layer's opacity. */
+.bg--hex::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='28' height='32' viewBox='0 0 28 32'%3E%3Cpath d='M14 2 25 8.5v15L14 30 3 23.5v-15Z' fill='none' stroke='%23808080' stroke-width='1'/%3E%3C/svg%3E");
+  background-size: 28px 32px;
+  opacity: 0.16;
+}
+html[data-appearance='light'] .bg--hex::before {
+  opacity: 0.22;
+}
+
+/* ---------- cursor (fx/CursorGlowBackground.tsx) ---------- */
+/* A soft glow + small bright dot springing after the pointer (the component
+ * sets their transform); at rest the glow sits above center. */
+.bg--cursor .cursor-glow {
+  position: absolute;
+  left: 0;
+  top: 0;
+  width: 180px;
+  height: 180px;
+  margin: -90px 0 0 -90px;
+  border-radius: 50%;
+  background: radial-gradient(circle, color-mix(in srgb, var(--accent) 26%, transparent), transparent 66%);
+}
+.bg--cursor .cursor-glow--rest {
+  left: 50%;
+  top: 42%;
+}
+.bg--cursor .cursor-dot {
+  position: absolute;
+  left: 0;
+  top: 0;
+  width: 8px;
+  height: 8px;
+  margin: -4px 0 0 -4px;
+  border-radius: 50%;
+  background: color-mix(in srgb, var(--accent) 65%, transparent);
+  box-shadow: 0 0 12px color-mix(in srgb, var(--accent) 70%, transparent);
+}
+
+/* ---------- particles (fx/ParticlesBackground.tsx) ---------- */
+/* A jittered grid of dots the component displaces away from the pointer;
+ * this just paints each one. */
+.bg--particles .particle {
+  position: absolute;
+  width: 4px;
+  height: 4px;
+  margin: -2px 0 0 -2px;
+  border-radius: 50%;
+  background: color-mix(in srgb, var(--accent) 55%, transparent);
+  box-shadow: 0 0 6px color-mix(in srgb, var(--accent) 45%, transparent);
+  will-change: transform;
+}
+html[data-appearance='light'] .bg--particles .particle {
+  background: color-mix(in srgb, var(--accent) 65%, #fff);
+}
+
+/* ---------- parallax (fx/ParallaxBackground.tsx) ---------- */
+/* Blurred orbs the component shifts by pointer position, scaled per-orb by
+ * depth; the look is bokeh with depth. */
+.bg--parallax .orb {
+  position: absolute;
+  border-radius: 50%;
+  filter: blur(14px);
+  opacity: 0.4;
+}
+html[data-appearance='light'] .bg--parallax .orb {
+  opacity: 0.28;
+}
+.bg--parallax .orb--accent {
+  background: var(--accent);
+}
+.bg--parallax .orb--accent-2 {
+  background: var(--accent-2);
+}
+.bg--parallax .orb--violet {
+  background: #8b5cf6;
+}
+
+/* ---------- constellation (fx/ConstellationBackground.tsx) ---------- */
+/* The nodes, neighbor links and pointer links are all drawn on the canvas;
+ * the CSS just makes the canvas fill the layer. */
+.bg--constellation canvas {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+}
+
+/* ---------- keyframes ---------- */
+@keyframes drift1 {
+  from {
+    transform: translate(0, 0) scale(1);
+  }
+  to {
+    transform: translate(40px, 30px) scale(1.15);
+  }
+}
+@keyframes drift2 {
+  from {
+    transform: translate(0, 0) scale(1);
+  }
+  to {
+    transform: translate(-36px, 40px) scale(1.1);
+  }
+}
+@keyframes drift3 {
+  from {
+    transform: translate(0, 0) scale(1);
+  }
+  to {
+    transform: translate(30px, -30px) scale(1.12);
+  }
+}
+@keyframes beamFlow {
+  from {
+    stroke-dashoffset: 1070;
+  }
+  to {
+    stroke-dashoffset: 0;
+  }
+}
+@keyframes waveSlide {
+  to {
+    transform: translateX(-50%);
+  }
+}
+@keyframes retroScroll {
+  from {
+    background-position: 0 0;
+  }
+  to {
+    background-position: 0 44px;
+  }
+}
+@keyframes dotDrift {
+  from {
+    transform: translate(-8%, -6%);
+  }
+  to {
+    transform: translate(10%, 8%);
+  }
+}
+@keyframes raysSpin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+@keyframes noiseJitter {
+  0%,
+  100% {
+    transform: translate(0, 0);
+  }
+  10% {
+    transform: translate(-5%, -10%);
+  }
+  20% {
+    transform: translate(-15%, 5%);
+  }
+  30% {
+    transform: translate(7%, -25%);
+  }
+  40% {
+    transform: translate(-5%, 25%);
+  }
+  50% {
+    transform: translate(-15%, 10%);
+  }
+  60% {
+    transform: translate(15%, 0);
+  }
+  70% {
+    transform: translate(0, 15%);
+  }
+  80% {
+    transform: translate(3%, 35%);
+  }
+  90% {
+    transform: translate(-10%, 10%);
+  }
+}
+@keyframes glowPulse {
+  0%,
+  100% {
+    opacity: 0.9;
+  }
+  50% {
+    opacity: 1;
+  }
+}
+@keyframes bubbleRise {
+  0% {
+    transform: translate(0, 0);
+    opacity: 0;
+  }
+  10% {
+    opacity: 0.85;
+  }
+  50% {
+    transform: translate(10px, -310px);
+  }
+  85% {
+    opacity: 0.6;
+  }
+  100% {
+    transform: translate(-6px, -620px);
+    opacity: 0;
+  }
+}
+@keyframes snowFall {
+  0% {
+    transform: translate(0, 0);
+    opacity: 0;
+  }
+  10% {
+    opacity: 0.8;
+  }
+  88% {
+    opacity: 0.65;
+  }
+  100% {
+    transform: translate(var(--drift, 12px), 640px);
+    opacity: 0;
+  }
+}
+@keyframes rainFall {
+  0% {
+    transform: translate(0, 0);
+    opacity: 0;
+  }
+  12% {
+    opacity: 0.75;
+  }
+  100% {
+    transform: translate(-24px, 560px);
+    opacity: 0;
+  }
+}
+@keyframes rippleExpand {
+  0% {
+    transform: scale(0.08);
+    opacity: 0;
+  }
+  14% {
+    opacity: 0.5;
+  }
+  100% {
+    transform: scale(1);
+    opacity: 0;
+  }
+}
+@keyframes orbitSpin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+@keyframes bokehDrift {
+  from {
+    transform: translate(0, 0);
+  }
+  to {
+    transform: translate(var(--dx, 30px), var(--dy, -20px));
+  }
+}
+@keyframes swirlSpin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+@keyframes spotlightSweep {
+  from {
+    transform: rotate(-24deg);
+  }
+  to {
+    transform: rotate(24deg);
+  }
+}
+@keyframes stripesScroll {
+  to {
+    background-position: 19.8px 0;
+  }
+}
+
+/* Belt-and-suspenders reduced-motion: the JS gate already stops the animated
+ * components (aurora, beams, stars, waves' keyframes via .bg--static,
+ * meteors' base opacity 0) and skips confetti, but kill the CSS-only loops
+ * too when the OS asks. */
+@media (prefers-reduced-motion: reduce) {
+  .aurora-blob,
+  .bg--glow,
+  .bg--beams path,
+  .bg--waves .wave,
+  .bg--meteors .meteor,
+  .bg--retro::before,
+  .bg--dots::after,
+  .bg--rays::before,
+  .bg--noise::before,
+  .bg--bubbles .bubble,
+  .bg--snow .flake,
+  .bg--rain .drop,
+  .bg--ripple .ring,
+  .bg--orbit .orbit,
+  .bg--bokeh .orb,
+  .bg--swirl::before,
+  .bg--spotlight::before,
+  .bg--stripes {
+    animation: none !important;
+  }
+}

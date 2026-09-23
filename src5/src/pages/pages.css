@@ -1,0 +1,109 @@
+/* Full-page styling for the worker-opened confirm dialog. Palette + shape come
+ * from theme/tokens.css; this page renders outside the popup, so this sheet is
+ * standalone (it repeats the button look rather than pulling in the whole
+ * popup stylesheet). The backdrop is the SAME Background component the popup
+ * renders (fx/Background.tsx), painted by theme/backgrounds.css — body is its
+ * positioned frame, so it covers the full viewport and scrolls with the page.
+ * (The routine's finish screen moved onto the dashboard as an overlay in
+ * 6.8.0 — its styles live in dashboard.css now, with finish- names.) */
+
+html,
+body {
+  height: 100%;
+}
+body {
+  position: relative;
+  margin: 0;
+  min-height: 100vh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+  background: var(--bg);
+  color: var(--text);
+  font: var(--font);
+  -webkit-font-smoothing: antialiased;
+}
+#root {
+  width: 100%;
+  display: flex;
+  justify-content: center;
+}
+
+.page-card {
+  position: relative;
+  z-index: 1; /* above the backdrop layer (z-index 0) */
+  width: 100%;
+  max-width: 460px;
+  /* The popup's --tile-tint knob: transparent at blur 0, alpha ramping with
+   * the blur above it (applyTheme); the fallback is the usual surface. */
+  background: var(--tile-tint, color-mix(in srgb, var(--surface) 92%, transparent));
+  border: 1px solid var(--line);
+  border-radius: var(--r-xl);
+  box-shadow: var(--shadow);
+  padding: 28px 26px;
+  /* The same glass knob the popup's cards use, so the pages match. */
+  backdrop-filter: blur(var(--tile-blur, 10px));
+}
+.page-glyph {
+  width: 44px;
+  height: 44px;
+  border-radius: 13px;
+  background: linear-gradient(135deg, var(--accent), var(--accent-2));
+  box-shadow: 0 6px 20px color-mix(in srgb, var(--accent) 45%, transparent);
+  margin-bottom: 16px;
+}
+.page-title {
+  margin: 0 0 6px;
+  font-size: 22px;
+  font-weight: 720;
+  letter-spacing: -0.02em;
+}
+.page-sub {
+  margin: 0;
+  font-size: 14px;
+  line-height: 1.5;
+  color: var(--text-dim);
+}
+.page-actions {
+  display: flex;
+  gap: 10px;
+  margin-top: 22px;
+}
+
+/* self-contained button (these pages don't load popup.css) */
+.btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  padding: 10px 14px;
+  border-radius: var(--r-md);
+  border: 1px solid var(--line);
+  background: var(--surface-2);
+  color: var(--text);
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: transform 0.08s, background 0.15s, filter 0.15s;
+}
+.btn:hover {
+  background: color-mix(in srgb, var(--surface-2) 70%, var(--text) 7%);
+}
+.btn:active {
+  transform: translateY(1px);
+}
+.btn--primary {
+  background: linear-gradient(135deg, var(--accent), var(--accent-2));
+  color: var(--accent-ink);
+  border-color: transparent;
+  box-shadow: 0 6px 18px color-mix(in srgb, var(--accent) 38%, transparent);
+}
+.btn--primary:hover {
+  filter: brightness(1.05);
+}
+.btn-lg {
+  flex: 1;
+  padding: 12px 16px;
+  font-size: 15px;
+}
