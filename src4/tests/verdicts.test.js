@@ -7,6 +7,8 @@ import {
   streakDone,
   statsAreCurrent,
   stepSkipReason,
+  dayRemainder,
+  nudgeMessage,
   rightSizedCount,
   judgeSettlement
 } from "../pure/verdicts.js";
@@ -55,8 +57,23 @@ test("stepSkipReason names the done wording per step", () => {
     stepSkipReason("imageSearch", { activities: { visualSearch: "1/1" } }),
     "already 1/1"
   );
-  // A step with no done-check (stats, keepEarning) never skips.
+  // A step with no done-check (stats) never skips.
   assert.equal(stepSkipReason("stats", { searchPoints: "60/60" }), null);
+});
+
+test("the keep-earning verdict skips only a fully spent, answered section", () => {
+  // all spent → skip, with the count in the reason
+  assert.equal(
+    stepSkipReason("keepEarning", { keepEarning: { open: 0, total: 4 } }),
+    "all 4 activities done"
+  );
+  // still-open tiles → run
+  assert.equal(stepSkipReason("keepEarning", { keepEarning: { open: 1, total: 4 } }), null);
+  // unread section → unknown, never a skip
+  assert.equal(stepSkipReason("keepEarning", {}), null);
+  assert.equal(stepSkipReason("keepEarning", { keepEarning: null }), null);
+  // a section that answered with nothing usable is not "done" either
+  assert.equal(stepSkipReason("keepEarning", { keepEarning: { open: 0, total: 0 } }), null);
 });
 
 test("rightSizedCount trims to the day's remainder from today's read", () => {
@@ -129,4 +146,92 @@ test("judgeSettlement continues while short but moving, with the count", () => {
 test("judgeSettlement says nothing more when the re-read is unreadable", () => {
   const decision = judgeSettlement({ round: 1, pair: [40, 60] }, null);
   assert.deepEqual(decision, { verdict: "done" });
+});
+
+// ---------- the evening nudge's verdict ----------
+
+test("dayRemainder lists the steps the routine would still run", () => {
+  const now = new Date(2026, 8, 6, 20, 0, 0);
+  const stats = {
+    at: now.getTime(),
+    searchPoints: "30/60",
+    readyToClaim: "250",
+    activities: { dailySet: "3/3", visualSearch: "0/1" },
+    keepEarning: { open: 2, total: 4 }
+  };
+  const remainder = dayRemainder(stats, now);
+  // dailySet is done ("3/3") — the nudge agrees with the routine and leaves it
+  // out; everything else is still open, claim included (250 points pending).
+  assert.deepEqual(
+    remainder.left.map(row => row.id),
+    ["search", "imageSearch", "keepEarning", "claim"]
+  );
+  assert.equal(remainder.left[0].label, "the search points");
+  assert.equal(remainder.left[0].detail, "30/60");
+  assert.equal(remainder.left[2].detail, "2 of 4 left");
+});
+
+test("dayRemainder is empty — not null — on a day with nothing left", () => {
+  const now = new Date(2026, 8, 6, 20, 0, 0);
+  const stats = {
+    at: now.getTime(),
+    searchPoints: "60/60",
+    readyToClaim: "0",
+    activities: { dailySet: "3/3", visualSearch: "1/1" },
+    keepEarning: { open: 0, total: 4 }
+  };
+  assert.deepEqual(dayRemainder(stats, now), { left: [] });
+  // The distinction matters: [] is "the day is finished", null is "I cannot
+  // tell" — and the caller latches the first but not the second.
+  assert.equal(nudgeMessage([]), "");
+});
+
+test("dayRemainder answers null on a stale or missing read", () => {
+  const now = new Date(2026, 8, 6, 20, 0, 0);
+  assert.equal(dayRemainder(null, now), null);
+  assert.equal(dayRemainder({}, now), null);
+  assert.equal(
+    dayRemainder({ at: now.getTime() - 86400000, searchPoints: "30/60" }, now),
+    null
+  );
+});
+
+test("dayRemainder never names a step the routine would skip", () => {
+  const now = new Date(2026, 8, 6, 20, 0, 0);
+  const stats = {
+    at: now.getTime(),
+    searchPoints: "10/60",
+    readyToClaim: "0",
+    activities: { dailySet: "0/3", visualSearch: "0/1" },
+    keepEarning: {}
+  };
+  // Same source of truth, so this holds by construction rather than by
+  // agreement: every listed step's own skip verdict must say "run".
+  const remainder = dayRemainder(stats, now);
+  assert.ok(remainder.left.length > 0);
+  for (const row of remainder.left) {
+    assert.equal(stepSkipReason(row.id, stats), null, `${row.id} should have run`);
+  }
+});
+
+test("nudgeMessage reads as a sentence in both the one and many cases", () => {
+  assert.equal(
+    nudgeMessage([{ id: "search", label: "the search points" }]),
+    "1 thing still open today — the search points."
+  );
+  assert.equal(
+    nudgeMessage([
+      { id: "search", label: "the search points" },
+      { id: "dailySet", label: "the Daily Set" }
+    ]),
+    "2 things still open today — the search points and the Daily Set."
+  );
+  assert.equal(
+    nudgeMessage([
+      { id: "search", label: "the search points" },
+      { id: "dailySet", label: "the Daily Set" },
+      { id: "imageSearch", label: "the visual search" }
+    ]),
+    "3 things still open today — the search points, the Daily Set and the visual search."
+  );
 });

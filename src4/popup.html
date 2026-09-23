@@ -255,6 +255,42 @@
             </div>
             <button type="button" class="btn btn-compact" id="goalSaveBtn">Save</button>
           </div>
+          <!-- The goal alert (5.1.0): a notification when the goal comes
+               within the lead time, and one when it lands. Shown below the
+               progress/empty state rather than inside the editor, so it is
+               reachable before a goal is even set — turning it on first and
+               picking the target later is a perfectly reasonable order. The
+               day count is inert until the toggle is on. -->
+          <div class="opts goal-alert">
+            <label class="opt">
+              <span class="opt-text">
+                Tell me when it's close
+                <span class="note">A notification once the goal is in reach, and again when it lands.</span>
+              </span>
+              <span class="opt-side">
+                <input
+                  type="number"
+                  id="goalAlertDaysBefore"
+                  min="0"
+                  max="60"
+                  inputmode="numeric"
+                  aria-label="Days before the goal to alert"
+                  disabled
+                />
+                <span class="opt-unit" aria-hidden="true">days</span>
+                <span class="switch switch-sm">
+                  <input
+                    type="checkbox"
+                    id="goalAlertEnabled"
+                    aria-label="Notify me when the goal is close"
+                  />
+                  <span class="switch-track" aria-hidden="true">
+                    <span class="switch-thumb"></span>
+                  </span>
+                </span>
+              </span>
+            </label>
+          </div>
         </div>
         <!-- The sparkline (ADR-020): one point per day of the recorded
            history, the delta each day between its first and last snapshot.
@@ -849,11 +885,12 @@
         </div>
 
         <!-- The scheduled daily run (ADR-019): start the routine at a fixed
-             local time, independent of the launch-time routine above. Fires
-             only while Chrome runs; a time missed while the browser was closed
-             runs on the next browser start (the once-per-day gate keeps it
-             from doubling up with the launch routine). The time field is
-             inert until the toggle is on. -->
+             local time, independent of the launch-time routine above. The wall
+             clock decides, not alarm delivery: a time missed while the browser
+             was closed (or the PC asleep) is owed the moment Chrome is next up,
+             so a day is never lost silently. The once-per-day gate keeps it
+             from doubling up with the launch routine. The time field is inert
+             until the toggle is on. -->
         <p class="group-label">Scheduled run</p>
         <div class="opts">
           <label class="opt">
@@ -873,6 +910,40 @@
                   type="checkbox"
                   id="scheduledRunEnabled"
                   aria-label="Run the routine daily at a set time"
+                />
+                <span class="switch-track" aria-hidden="true">
+                  <span class="switch-thumb"></span>
+                </span>
+              </span>
+            </span>
+          </label>
+        </div>
+
+        <!-- The evening nudge (5.1.0): one notification late in the day naming
+             what is still open, with a Run it button on the banner itself. It
+             rides the same wall-clock machinery as the schedule above — a
+             nudge that could be silently missed would repeat the schedule's
+             old bug. Its own once-a-day latch, so it fires on days the routine
+             already ran (those are exactly the days work may be left). -->
+        <p class="group-label">Evening nudge</p>
+        <div class="opts">
+          <label class="opt">
+            <span class="opt-text">
+              Remind me what's still open
+              <span class="note">One notification, with a Run it button. Stays quiet on a day with nothing left.</span>
+            </span>
+            <span class="opt-side">
+              <input
+                type="time"
+                id="eveningNudgeTime"
+                aria-label="Evening nudge time"
+                disabled
+              />
+              <span class="switch switch-sm">
+                <input
+                  type="checkbox"
+                  id="eveningNudgeEnabled"
+                  aria-label="Send an evening reminder"
                 />
                 <span class="switch-track" aria-hidden="true">
                   <span class="switch-thumb"></span>

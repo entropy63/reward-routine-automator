@@ -1100,7 +1100,8 @@ main[hidden] {
   flex: none;
 }
 
-.opt-side input[type="time"] {
+.opt-side input[type="time"],
+.opt-side input[type="number"] {
   padding: 4px 6px;
   border: 1px solid var(--line-strong);
   border-radius: var(--r-sm);
@@ -1109,13 +1110,28 @@ main[hidden] {
   font: 500 12px/1.2 var(--font-mono);
 }
 
-.opt-side input[type="time"]:focus {
+/* A number field beside a switch needs to stay narrow (the goal alert's
+   lead time is one or two digits). */
+.opt-side input[type="number"] {
+  width: 46px;
+  text-align: center;
+}
+
+/* The unit that follows such a field ("days"). */
+.opt-unit {
+  font-size: 11px;
+  color: var(--ink-muted);
+}
+
+.opt-side input[type="time"]:focus,
+.opt-side input[type="number"]:focus {
   outline: none;
   border-color: var(--brand);
   box-shadow: 0 0 0 3px var(--brand-tint);
 }
 
-.opt-side input[type="time"]:disabled {
+.opt-side input[type="time"]:disabled,
+.opt-side input[type="number"]:disabled {
   opacity: 0.45;
   cursor: not-allowed;
 }
@@ -1765,6 +1781,15 @@ html[data-experimental="on"] #couponBtn {
 
 .goal-progress {
   margin-top: 4px;
+}
+
+/* The goal alert row (5.1.0) sits under the progress bar (or the empty state)
+   inside the same card, so it needs the same quiet separator the goal block
+   itself uses — without one it reads as part of the progress line above. */
+.goal-alert {
+  margin-top: 8px;
+  padding-top: 2px;
+  border-top: 1px solid var(--line);
 }
 
 /* Flex and grid would beat the UA's [hidden] — the codebase's standing

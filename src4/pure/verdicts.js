@@ -56,6 +56,15 @@ export const STEP_DONE_CHECKS = {
     const done = streakDone((stats.activities || {}).dailySet);
     return done && `already ${done}`;
   },
+  // The Earn read counts the section's still-open tiles ({open, total}).
+  // Skip only when a section that answered shows every tile spent — an
+  // unread (null) or empty section never skips, the same
+  // only-wrong-answer-is-skipping-something-not-done rule as the rest.
+  keepEarning: stats => {
+    const counts = stats.keepEarning;
+    if (!counts || typeof counts.total !== "number" || counts.total <= 0) return null;
+    return counts.open > 0 ? null : `all ${counts.total} activities done`;
+  },
   // The image search earns the visual-search streak's one point.
   imageSearch: stats => {
     const done = streakDone((stats.activities || {}).visualSearch);
@@ -72,6 +81,59 @@ export function stepSkipReason(id, stats) {
   const check = STEP_DONE_CHECKS[id];
   if (!check) return null;
   return check(stats) || null;
+}
+
+// The evening nudge's verdict (build 4): what is STILL open today, and null
+// when there is nothing to nudge about.
+//
+// It answers by asking stepSkipReason for each nudgeable step — the same
+// done-checks the routine runs — so the nudge can never name something the
+// routine would skip, and can never stay silent about something it would do.
+// A step with no check at all (stats is a read, not a promise) has nothing to
+// be "still open", so it is absent rather than always-listed.
+//
+// `now` gates the read: yesterday's numbers say nothing about today, and a
+// nudge built on them would send the user to redo finished work. A stale or
+// missing read returns null (silence), not an empty list — the notifications
+// are the user's attention, and an unknown is not a reason to spend it.
+const NUDGE_ROWS = [
+  { id: "search", label: "the search points", detail: s => s.searchPoints },
+  { id: "dailySet", label: "the Daily Set", detail: s => (s.activities || {}).dailySet },
+  { id: "imageSearch", label: "the visual search", detail: s => (s.activities || {}).visualSearch },
+  {
+    id: "keepEarning",
+    label: "Keep earning",
+    detail: s => {
+      const c = s.keepEarning;
+      if (!c || typeof c.total !== "number" || c.total <= 0) return null;
+      return `${c.open} of ${c.total} left`;
+    }
+  },
+  { id: "claim", label: "points ready to claim", detail: s => s.readyToClaim }
+];
+
+export function dayRemainder(stats, now = new Date()) {
+  if (!statsAreCurrent(stats, now)) return null;
+
+  const left = [];
+  for (const row of NUDGE_ROWS) {
+    if (stepSkipReason(row.id, stats) != null) continue; // done — nothing to nudge
+    left.push({ id: row.id, label: row.label, detail: row.detail(stats) || null });
+  }
+  return { left };
+}
+
+// The nudge's one-line body: "3 things still open — the Daily Set, the visual
+// search and Keep earning". Kept next to the verdict so the wording is part of
+// the thing being tested, not of the notification call.
+export function nudgeMessage(left) {
+  if (!left || !left.length) return "";
+  const names = left.map(row => row.label);
+  const list =
+    names.length === 1
+      ? names[0]
+      : `${names.slice(0, -1).join(", ")} and ${names[names.length - 1]}`;
+  return `${left.length} ${left.length === 1 ? "thing" : "things"} still open today — ${list}.`;
 }
 
 // Points one web search earns on the account this automates (level 2:

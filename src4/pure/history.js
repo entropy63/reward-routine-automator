@@ -80,3 +80,63 @@ export function goalDaysRemaining(balance, target, perDay) {
   if (!Number.isFinite(perDay) || perDay <= 0) return null;
   return Math.ceil((target - balance) / perDay);
 }
+
+// The goal alert's verdict (build 4): should the popup's goal card — and the
+// user's phone — say something today?
+//
+//   reached     the balance is at or past the target
+//   daysLeft    days remaining at the recent rate, or null when unknowable
+//   shouldAlert whether this is a day worth a notification
+//
+// `daysBefore` is the user's own lead time: alert once the goal is within that
+// many days, including the day it lands. The alert fires on the CROSSING, not
+// on every read — the caller latches `shouldAlert` per state — so this stays a
+// pure description of the moment and never has to know what was announced.
+//
+// A null `daysLeft` (no positive trend, no history yet) is deliberately NOT an
+// alert: "you will never get there" is not a useful notification, and the
+// popup's goal card already says the trend is unmeasurable.
+//
+// No goal set (target 0, the default) is not an alert either. That case has to
+// be answered HERE rather than left to the caller: goalDaysRemaining sees any
+// non-negative balance as having passed a 0 target and answers 0 days, which
+// would read as "reached today" and nag a user who never asked for a goal.
+export function goalState(balance, target, history, daysBefore = 1, days = 7) {
+  const hasGoal = Number.isFinite(target) && target > 0;
+  if (!hasGoal) return { reached: false, daysLeft: null, shouldAlert: false };
+
+  const reached = Number.isFinite(balance) && balance >= target;
+  const daysLeft = reached ? 0 : goalDaysRemaining(balance, target, trendPerDay(history, days));
+
+  let shouldAlert = false;
+  if (reached) {
+    shouldAlert = true;
+  } else if (Number.isFinite(daysLeft)) {
+    const lead = Number.isFinite(daysBefore) && daysBefore >= 0 ? Math.floor(daysBefore) : 1;
+    shouldAlert = daysLeft <= lead;
+  }
+
+  return { reached, daysLeft, shouldAlert };
+}
+
+// "5,113" — the balance and the goal read as amounts wherever they are shown,
+// and the history module is already the one place that turns stored values
+// into user-facing numbers.
+function amount(n) {
+  return String(Math.round(n)).replace(/\B(?=(\d{3})+(?!\d))/g, ",");
+}
+
+// The alert's wording, kept beside the verdict that decides it: "reached" ends
+// the chase, "near" is the user's own lead time doing its job. Both name the
+// real numbers — an alert that only says "your goal is close" makes the user
+// open the extension to find out what that means.
+export function goalMessage(state, balance, target) {
+  const goal = amount(target);
+  if (state.reached) {
+    return `You're at ${amount(balance)} points — your ${goal}-point goal is reached. Redeem whenever you like.`;
+  }
+  const days = state.daysLeft;
+  const away = days === 1 ? "about a day" : `about ${days} days`;
+  return `You're at ${amount(balance)} points — ${away} from your ${goal}-point goal at your recent pace.`;
+}
+

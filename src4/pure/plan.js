@@ -13,8 +13,9 @@ import { statsAreCurrent, stepSkipReason } from "./verdicts.js";
 //                             would NOT run), null when it would
 // A stale, missing or unreadable read never skips — every unknown runs, the
 // same only-wrong-answer-is-skipping-something-not-done direction as the
-// routine. Steps with no done-check (keepEarning, whose activities vary by
-// the day; stats, which is the read itself) always report willRun.
+// routine. keepEarning's verdict needs the Earn read's {open, total} counts,
+// so a read taken before that section answered reports willRun — an unknown,
+// not a claim that there is work.
 export function routinePlan(stats, order, now = new Date()) {
   const fresh = statsAreCurrent(stats, now);
   return (Array.isArray(order) ? order : []).map(id => {

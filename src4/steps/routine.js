@@ -112,10 +112,11 @@ async function reportSkippedStep(id, reason) {
     search: "Search",
     claim: "Claim",
     dailySet: "Daily set",
+    keepEarning: "Keep earning",
     imageSearch: "Image search"
   };
   const detail = `${labels[id] || id} — skipped, ${reason}`;
-  if (id === "claim" || id === "dailySet") {
+  if (id === "claim" || id === "dailySet" || id === "keepEarning") {
     await setLastRewards(detail, null);
   } else if (id === "imageSearch") {
     await reportImageSearch(`skipped, ${reason}`, null);
@@ -268,15 +269,23 @@ export function routineSkippedQuery(skipped) {
 
 // ---------- The sequence ----------
 
-// The sequence. `manual` (the popup's "Run the routine" button, ADR-020)
-// opts out of the three LAUNCH gates — the master switch, the once-per-day
-// skip and the confirm dialog — because a button press is an explicit user
-// action, the same reasoning as the Run-now buttons. Everything else is
-// identical: the per-step skip-when-done verdicts still apply (no search
-// batch at 60/60), a Stop still cancels, the finish page still opens, and a
-// genuinely finished routine still marks its day (so the launch routine
-// does not redo what the manual one completed).
-export async function runStartupSequence({ manual = false } = {}) {
+// The sequence. Two opt-outs of the LAUNCH gates, and they are not the same
+// opt-out:
+//
+//   manual     (the popup's "Run the routine" button, ADR-020) skips all three
+//              — the master switch, the once-per-day skip and the confirm
+//              dialog — because a button press is an explicit user action.
+//   scheduled  (the daily timed run) skips the master switch and the confirm
+//              dialog but KEEPS the once-per-day skip: the time the user set
+//              IS the intent, so an unattended confirm window would auto-
+//              cancel every scheduled round — but a round that already ran
+//              today (a morning startup, say) must not be doubled.
+//
+// Everything else is identical: the per-step skip-when-done verdicts still
+// apply (no search batch at 60/60), a Stop still cancels, the finish page
+// still opens, and a genuinely finished routine still marks its day (so the
+// launch routine does not redo what the manual one completed).
+export async function runStartupSequence({ manual = false, scheduled = false } = {}) {
   const settings = await getSettings();
 
   // A stop during an earlier step must also cancel the steps not started yet:
@@ -293,13 +302,15 @@ export async function runStartupSequence({ manual = false } = {}) {
     state.captures = { capturing: [], opened: {} };
   });
 
-  if (!manual && !settings.startupEnabled) return;
+  if (!manual && !scheduled && !settings.startupEnabled) return;
 
   // Once per day: if the routine already completed today, don't redo it on a
   // second browser launch. The stale-state cleanup above has already run by
   // here, which is what we want either way — the skip is the whole routine.
   // (LAST_ROUTINE_DAY stays a key of its own, outside the document: it is
   // the whole point that it survives stops, updates and evictions.)
+  // A scheduled run keeps this gate on purpose: the schedule is a second way
+  // to reach the same once-a-day routine, not a way around it.
   if (!manual && settings.startupOncePerDay) {
     const { [LAST_ROUTINE_DAY]: lastDay } = await chrome.storage.local.get(
       LAST_ROUTINE_DAY
@@ -315,8 +326,11 @@ export async function runStartupSequence({ manual = false } = {}) {
   // purpose — there is nothing to ask about when the routine would not run
   // anyway — and before the routine field is set, so a cancel leaves nothing
   // routine-shaped behind. A manual run skips it: the button IS the answer.
+  // A scheduled run skips it too: nobody is there to press it, and the time
+  // the user configured is itself the consent.
   if (
     !manual &&
+    !scheduled &&
     settings.confirmBeforeRoutine &&
     !(await confirmRoutineStart())
   ) {

@@ -8,6 +8,32 @@ import { statsAreCurrent, progressPair, rightSizedCount } from "./pure/verdicts.
 import { earnedToday, trendPerDay, goalDaysRemaining } from "./pure/history.js";
 import { localDayKey } from "./lib/day.js";
 
+// The search-points ring's arc length: 2πr with r=36 — kept in one place so the
+// SVG and the math can't drift apart.
+//
+// Module scope, NOT beside renderRing() below, and that placement is load
+// bearing: the popup's opening render (renderStats, early in the init body)
+// reaches this value long before the bottom half of the callback has run, so a
+// const declared down there would be in its temporal dead zone and throw
+// — killing the whole script and leaving every button dead. That is exactly the
+// 5.0.1 crash, one constant over; the popup's own rule is that anything the
+// first render touches is declared before the first render can run.
+const RING_CIRCUMFERENCE = 226.2;
+
+// The step names the plan preview and the pre-flight panel print, keyed by step
+// id. Module scope for the same reason as the ring above: the plan renders
+// during the popup's opening pass, and a const declared beside renderPlan would
+// be in its dead zone by the time that pass reaches it. `stats` is here too so
+// a plan row can never fall back to a bare lowercase id.
+const PLAN_STEP_TITLES = {
+  stats: "Stats",
+  claim: "Claim",
+  dailySet: "Daily set",
+  keepEarning: "Keep earning",
+  search: "Web searches",
+  imageSearch: "Image search"
+};
+
 document.addEventListener("DOMContentLoaded", async () => {
   // Canonical step ids in default order — mirrors STARTUP_STEPS in background.js.
   const STEP_IDS = ["stats", "claim", "dailySet", "keepEarning", "search", "imageSearch"];
@@ -192,6 +218,10 @@ document.addEventListener("DOMContentLoaded", async () => {
   const restockWatcherToggle = document.getElementById("restockWatcherEnabled");
   const scheduledRunToggle = document.getElementById("scheduledRunEnabled");
   const scheduledRunTimeInput = document.getElementById("scheduledRunTime");
+  const eveningNudgeToggle = document.getElementById("eveningNudgeEnabled");
+  const eveningNudgeTimeInput = document.getElementById("eveningNudgeTime");
+  const goalAlertToggle = document.getElementById("goalAlertEnabled");
+  const goalAlertDaysInput = document.getElementById("goalAlertDaysBefore");
 
   // One drag-reorder implementation, three lists (makeSortableList, below):
   // each instance owns its own drag/settle state, so the lists never interact.
@@ -304,6 +334,12 @@ document.addEventListener("DOMContentLoaded", async () => {
   scheduledRunToggle.checked = effectiveSettings.scheduledRunEnabled ?? false;
   scheduledRunTimeInput.value = effectiveSettings.scheduledRunTime || "09:00";
   scheduledRunTimeInput.disabled = !scheduledRunToggle.checked;
+  eveningNudgeToggle.checked = effectiveSettings.eveningNudgeEnabled ?? false;
+  eveningNudgeTimeInput.value = effectiveSettings.eveningNudgeTime || "20:00";
+  eveningNudgeTimeInput.disabled = !eveningNudgeToggle.checked;
+  goalAlertToggle.checked = effectiveSettings.goalAlertEnabled ?? false;
+  goalAlertDaysInput.value = effectiveSettings.goalAlertDaysBefore ?? 1;
+  goalAlertDaysInput.disabled = !goalAlertToggle.checked;
 
   // Unknown ids are dropped and duplicates collapse by construction (the
   // filter walks SECTION_IDS, not the stored list); the hide order is kept.
@@ -737,7 +773,7 @@ document.addEventListener("DOMContentLoaded", async () => {
   //
   // Both follow the same contract: the popup writes the setting, then tells
   // the worker to reschedule its alarm from what was just written. The worker
-  // reads the setting back itself (syncRedeemWatch/syncScheduledRun), so the
+  // reads the setting back itself (syncRedeemWatch/ensureScheduledRun), so the
   // stored value stays the one truth.
 
   restockWatcherToggle.addEventListener("change", async () => {
@@ -758,6 +794,40 @@ document.addEventListener("DOMContentLoaded", async () => {
     if (!scheduledRunTimeInput.value) return;
     await patchSettings({ scheduledRunTime: scheduledRunTimeInput.value });
     chrome.runtime.sendMessage({ type: "SYNC_SCHEDULED_RUN" }).catch(() => {});
+  });
+
+  // The evening nudge (5.1.0): the same two-step contract as the schedule
+  // above — store, then ask the worker to re-arm from what was stored. Setting
+  // a time already past today nudges today, which is the same promise the
+  // schedule makes.
+  eveningNudgeToggle.addEventListener("change", async () => {
+    eveningNudgeTimeInput.disabled = !eveningNudgeToggle.checked;
+    await patchSettings({ eveningNudgeEnabled: eveningNudgeToggle.checked });
+    chrome.runtime.sendMessage({ type: "SYNC_NUDGE" }).catch(() => {});
+  });
+
+  eveningNudgeTimeInput.addEventListener("change", async () => {
+    if (!eveningNudgeTimeInput.value) return;
+    await patchSettings({ eveningNudgeTime: eveningNudgeTimeInput.value });
+    chrome.runtime.sendMessage({ type: "SYNC_NUDGE" }).catch(() => {});
+  });
+
+  // The goal alert (5.1.0). No worker message: unlike the two schedules there
+  // is nothing to arm — the alert is judged inside the stats read itself, from
+  // these settings, on the next read. Turning it off takes the standing banner
+  // down on that same read (readers/stats.js).
+  goalAlertToggle.addEventListener("change", async () => {
+    goalAlertDaysInput.disabled = !goalAlertToggle.checked;
+    await patchSettings({ goalAlertEnabled: goalAlertToggle.checked });
+  });
+
+  // An empty or unreadable lead time keeps the stored one, exactly like the
+  // schedule's time field: 0 is a real answer ("tell me the day it lands"),
+  // but "" is not an answer at all.
+  goalAlertDaysInput.addEventListener("change", async () => {
+    const value = Number(goalAlertDaysInput.value);
+    if (!goalAlertDaysInput.value.trim() || !Number.isFinite(value)) return;
+    await patchSettings({ goalAlertDaysBefore: Math.max(0, Math.round(value)) });
   });
 
   // ---------- theme ----------
@@ -1639,10 +1709,8 @@ document.addEventListener("DOMContentLoaded", async () => {
 
   // The ring: the search-points pair ("40/60") as an arc. With no today-fresh
   // pair the ring keeps its empty "—" state (the CSS default offset holds the
-  // arc at zero). 2πr with r=36 — kept in one place so the SVG and the math
-  // can't drift apart.
-  const RING_CIRCUMFERENCE = 226.2;
-
+  // arc at zero). The circumference itself is RING_CIRCUMFERENCE, at module
+  // scope above.
   function renderRing() {
     const pair = progressPair(lastStatsSeen && lastStatsSeen.searchPoints);
     if (!statsAreCurrent(lastStatsSeen) || !pair) {
@@ -1724,13 +1792,9 @@ document.addEventListener("DOMContentLoaded", async () => {
   // read itself, never a "step" from the user's point of view) and disabled
   // steps don't appear; the whole block hides until a today-fresh read
   // exists, because a stale read has no verdicts to show.
-  const PLAN_STEP_TITLES = {
-    claim: "Claim",
-    dailySet: "Daily set",
-    keepEarning: "Keep earning",
-    search: "Web searches",
-    imageSearch: "Image search"
-  };
+  // PLAN_STEP_TITLES lives at module scope (top of this file), not here — see
+  // the note there: the plan is rendered during the popup's opening pass, so a
+  // const declared down here would be in its dead zone.
 
   function renderPlan() {
     const stepEnabled = id => {

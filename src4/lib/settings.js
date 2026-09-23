@@ -55,11 +55,27 @@ export const DEFAULT_SETTINGS = {
   keepEarningMaxTiles: 0,          // 0 = however many are there today
 
   // The scheduled daily run (ADR-019): start the routine at a fixed local
-  // time, independent of the launch-time routine. Fires only while Chrome
-  // is running; a fire missed while the browser was closed runs on the next
-  // browser start (the once-per-day gate keeps it from doubling up).
+  // time, independent of the launch-time routine. The WALL CLOCK is what
+  // decides, not alarm delivery: a heartbeat alarm plus every worker wake
+  // re-ask the pure scheduledDue() check, so a browser closed (or a PC asleep)
+  // through the configured moment still runs the owed round the next time
+  // Chrome is up — no silent lost day. The once-per-day gate keeps it from
+  // doubling up with the launch routine.
   scheduledRunEnabled: false,
   scheduledRunTime: "09:00",       // local "HH:MM", 24-hour
+
+  // The evening nudge (5.1.0): one notification late in the day naming what is
+  // still open, with a "Run it" button. Same clock as the scheduled run — a
+  // heartbeat plus every worker wake re-ask the pure scheduledDue() check — so
+  // a nudge cannot be silently missed (that was the whole bug the scheduled
+  // run shipped with). Own once-a-day latch, independent of the routine's.
+  eveningNudgeEnabled: false,
+  eveningNudgeTime: "20:00",       // local "HH:MM", 24-hour
+
+  // The goal alert (5.1.0): tell the user when the redeem goal is close, and
+  // again when it lands. Fires on the CROSSING, not on every read.
+  goalAlertEnabled: false,
+  goalAlertDaysBefore: 1,          // alert once the goal is within N days
 
   // The restock watcher: re-run the redeem watch on a background alarm so
   // the restock/sold-out banners stay fresh without the popup. Opt-in —

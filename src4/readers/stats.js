@@ -23,7 +23,8 @@ import { closeTabs, waitForTabComplete } from "../lib/tabs.js";
 import { setLastStatsLog } from "../lib/log.js";
 import { getSettings } from "../lib/settings.js";
 import { mergeStats } from "../pure/merge-stats.js";
-import { parsePoints, recordDay } from "../pure/history.js";
+import { parsePoints, recordDay, goalState, goalMessage } from "../pure/history.js";
+import { notify, clearNotification } from "../lib/notify.js";
 import { readRewardsStats } from "../injections/stats-read.js";
 import { readCouponCount } from "../injections/coupons.js";
 import { REWARDS_DASHBOARD, REWARDS_EARN } from "./rewards-section.js";
@@ -31,6 +32,10 @@ import { REWARDS_DASHBOARD, REWARDS_EARN } from "./rewards-section.js";
 const LAST_STATS = "lastStats";
 const LAST_COUPONS = "lastCoupons";
 const POINTS_HISTORY = "pointsHistory";
+// Which goal alert the user has already been given ("near" or "reached"), so a
+// read every few minutes does not become a notification every few minutes.
+const GOAL_ALERT_STATE = "goalAlertState";
+const GOAL_NOTIFICATION_ID = "goalAlert";
 
 // How long the page-side stats reader waits for the React app to hydrate
 // before reporting whatever it could find. The cards render first, the
@@ -49,6 +54,51 @@ const COUPON_READ_MS = 5000;
 // the shared capture lists, so each runner refuses to double up and closes
 // only the tab(s) it opened itself.
 export const READ_RUN_GUARDS = { redeem: false, stats: false };
+
+// The goal alert (5.1.0): one notification when the redeem goal comes within
+// the user's lead time, one when it lands — on the CROSSING, never on every
+// read. A watch that re-read every few minutes would otherwise re-notify every
+// few minutes, which is the fastest way to get an extension muted.
+//
+// The latch is a state string, not a boolean: "near" and "reached" are two
+// separate crossings, so a user already told "about 2 days" is told again when
+// the balance actually lands. A read that says NO alert CLEARS the latch — a
+// user who spends points and falls back out of range is told again when they
+// climb back, rather than being written off after one crossing.
+//
+// Turning the setting off takes the standing banner down with it (and forgets
+// the latch, so re-enabling re-arms from scratch).
+//
+// Exported for the probe: a real read needs a signed-in Rewards page, which a
+// test profile does not have. It touches nothing but storage, the settings
+// blob and the notification wrapper — the same three the read hands it — so
+// driving it from outside is the same call the read makes.
+export async function checkGoalAlert(balance, history, settings) {
+  const { [GOAL_ALERT_STATE]: seen } = await chrome.storage.local.get(GOAL_ALERT_STATE);
+
+  if (!settings.goalAlertEnabled) {
+    if (seen != null) await chrome.storage.local.remove(GOAL_ALERT_STATE);
+    clearNotification(GOAL_NOTIFICATION_ID);
+    return;
+  }
+
+  const target = Number(settings.redeemGoalPts);
+  const state = goalState(balance, target, history, settings.goalAlertDaysBefore);
+  const now = state.reached ? "reached" : state.shouldAlert ? "near" : null;
+
+  if (now === seen) return; // already said this one
+  if (now == null) {
+    if (seen != null) await chrome.storage.local.remove(GOAL_ALERT_STATE);
+    return;
+  }
+
+  await chrome.storage.local.set({ [GOAL_ALERT_STATE]: now });
+  notify(
+    state.reached ? "Goal reached" : "Goal almost there",
+    goalMessage(state, balance, target),
+    { id: GOAL_NOTIFICATION_ID }
+  );
+}
 
 export async function refreshStats() {
   if (READ_RUN_GUARDS.stats) {
@@ -380,9 +430,17 @@ export async function refreshStats() {
         const { [POINTS_HISTORY]: history } = await chrome.storage.local.get(
           POINTS_HISTORY
         );
-        await chrome.storage.local.set({
-          [POINTS_HISTORY]: recordDay(history, localDayKey(), points)
-        });
+        const nextHistory = recordDay(history, localDayKey(), points);
+        await chrome.storage.local.set({ [POINTS_HISTORY]: nextHistory });
+
+        // The goal alert rides the same fresh numbers (5.1.0). Guarded like
+        // every other convenience in this read: a notification that cannot be
+        // shown must not fail a stats read.
+        try {
+          await checkGoalAlert(points, nextHistory, await getSettings());
+        } catch (e) {
+          console.warn("Stats: the goal alert could not be checked:", e);
+        }
       }
     } else {
       console.warn("Stats: the readers found nothing; keeping the last stats.");

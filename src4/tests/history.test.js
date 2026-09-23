@@ -9,7 +9,9 @@ import {
   recordDay,
   earnedToday,
   trendPerDay,
-  goalDaysRemaining
+  goalDaysRemaining,
+  goalState,
+  goalMessage
 } from "../pure/history.js";
 
 test("parsePoints reads the digits out of a display string", () => {
@@ -132,4 +134,84 @@ test("goalDaysRemaining answers null when the rate cannot get there", () => {
   assert.equal(goalDaysRemaining(5000, 6000, -10), null);
   assert.equal(goalDaysRemaining(null, 6000, 10), null);
   assert.equal(goalDaysRemaining(5000, null, 10), null);
+});
+
+// ---------- the goal alert ----------
+
+// Seven days climbing 10 points a day, ending at `last`. The same shape
+// trendPerDay's own test uses: a measurable 10/day.
+function historyEndingAt(last) {
+  return Array.from({ length: 7 }, (_, i) => ({
+    day: `2026-08-${31 + i}`,
+    first: last - 60 + i * 10,
+    last: last - 60 + i * 10,
+    at: i
+  }));
+}
+
+test("goalState alerts once the goal is within the lead time", () => {
+  const history = historyEndingAt(5000); // 10/day
+  // 400 points out at 10/day = 40 days — not close with a 1-day lead.
+  assert.deepEqual(goalState(4600, 5000, history, 1), {
+    reached: false,
+    daysLeft: 40,
+    shouldAlert: false
+  });
+  // 20 points out = 2 days: with a 3-day lead that IS the alert.
+  assert.deepEqual(goalState(4980, 5000, history, 3), {
+    reached: false,
+    daysLeft: 2,
+    shouldAlert: true
+  });
+  // The boundary is inclusive: 2 days left with a 2-day lead alerts.
+  assert.equal(goalState(4980, 5000, history, 2).shouldAlert, true);
+});
+
+test("goalState reports the goal as reached, with 0 days left", () => {
+  const state = goalState(5000, 5000, historyEndingAt(5000), 1);
+  assert.deepEqual(state, { reached: true, daysLeft: 0, shouldAlert: true });
+  // Past it is still reached — a redeem that overshoots is not a regression.
+  assert.equal(goalState(5200, 5000, historyEndingAt(5200), 1).reached, true);
+});
+
+test("goalState never alerts with no goal set", () => {
+  // The trap this guards: goalDaysRemaining sees any balance as having passed
+  // a 0 target, so an unguarded 0 would read as "reached today" and nag a user
+  // who never asked for a goal.
+  assert.deepEqual(goalState(5000, 0, historyEndingAt(5000), 1), {
+    reached: false,
+    daysLeft: null,
+    shouldAlert: false
+  });
+  assert.equal(goalState(5000, null, historyEndingAt(5000), 1).shouldAlert, false);
+});
+
+test("goalState stays quiet when the pace cannot be measured", () => {
+  // No trend (a spend, or a single snapshot): daysLeft is null, which is
+  // "unknowable", not "close".
+  const spend = [
+    { day: "2026-09-05", first: 5000, last: 5060, at: 1 },
+    { day: "2026-09-06", first: 5060, last: 1000, at: 2 }
+  ];
+  assert.deepEqual(goalState(1000, 5000, spend, 7), {
+    reached: false,
+    daysLeft: null,
+    shouldAlert: false
+  });
+  assert.equal(goalState(1000, 5000, [], 7).shouldAlert, false);
+});
+
+test("goalMessage names the real numbers, thousands separated", () => {
+  assert.equal(
+    goalMessage({ reached: true, daysLeft: 0 }, 5113, 5000),
+    "You're at 5,113 points — your 5,000-point goal is reached. Redeem whenever you like."
+  );
+  assert.equal(
+    goalMessage({ reached: false, daysLeft: 2 }, 4980, 5000),
+    "You're at 4,980 points — about 2 days from your 5,000-point goal at your recent pace."
+  );
+  assert.equal(
+    goalMessage({ reached: false, daysLeft: 1 }, 4990, 5000),
+    "You're at 4,990 points — about a day from your 5,000-point goal at your recent pace."
+  );
 });
