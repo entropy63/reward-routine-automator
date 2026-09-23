@@ -166,6 +166,11 @@ document.addEventListener("DOMContentLoaded", async () => {
     bingApp: document.getElementById("statBingApp"),
     visualSearch: document.getElementById("statVisualSearch")
   };
+  // The earn bar's own two nodes (user request 2026-09-07): the value inside
+  // it is statSearchPoints above, written by renderStats like every other
+  // stat — these are the container it hides with and the fill it sizes.
+  const searchPointsBar = document.getElementById("searchPointsBar");
+  const todayEarnFill = document.getElementById("todayEarnFill");
 
   // One drag-reorder implementation, three lists (makeSortableList, below):
   // each instance owns its own drag/settle state, so the lists never interact.
@@ -267,6 +272,9 @@ document.addEventListener("DOMContentLoaded", async () => {
   const automaticMode = effectiveSettings.rightSizeSearchBatch ?? true;
   searchModeManual.checked = !automaticMode;
   searchModeAutomatic.checked = automaticMode;
+  // Automatic right-sizes the batch itself, so its manual size field is hidden
+  // (the CSS keys off this attribute); manual mode shows it.
+  searchSettingsEl.dataset.batchMode = automaticMode ? "automatic" : "manual";
   minDelayInput.value = effectiveSettings.minDelaySec ?? 5;
   maxDelayInput.value = effectiveSettings.maxDelaySec ?? 15;
   tabCloseDelayInput.value = effectiveSettings.tabCloseDelaySec ?? 8;
@@ -1176,7 +1184,12 @@ document.addEventListener("DOMContentLoaded", async () => {
   // IS the mode — automatic on, manual off.
   for (const radio of [searchModeManual, searchModeAutomatic]) {
     radio.addEventListener("change", () => {
-      patchSettings({ rightSizeSearchBatch: searchModeAutomatic.checked });
+      const automatic = searchModeAutomatic.checked;
+      patchSettings({ rightSizeSearchBatch: automatic });
+      // Manual reveals the "Searches per batch" field, automatic hides it. The
+      // panel is open when this fires, so re-measure the popup height.
+      searchSettingsEl.dataset.batchMode = automatic ? "automatic" : "manual";
+      syncHeight();
     });
   }
 
@@ -1532,6 +1545,44 @@ document.addEventListener("DOMContentLoaded", async () => {
 
   // Display strings exactly as the dashboard showed them, plus a plain HH:MM
   // stamp — the read is always recent enough that a date would only add noise.
+  // The earn bar's arithmetic, lifted from the third build's pure/verdicts.js
+  // (user request 2026-09-07). These popups are classic scripts, not modules,
+  // so the two functions are inlined rather than imported — same logic, and a
+  // change to one must be mirrored in the other (the codebase's existing
+  // mirror convention for normalizeOrder / STEP_IDS).
+  //
+  // The trailing "X/Y" pair of a stat value. Both stored shapes end with it
+  // ("3/3" from the tiles, "Day 4 of 7 · 3/3" from the streak cards);
+  // returns [done, total] or null when the value carries no pair.
+  function progressPair(value) {
+    if (typeof value !== "string") return null;
+    const match = value.trim().match(/(\d+)\s*\/\s*(\d+)$/);
+    if (!match) return null;
+    return [Number(match[1]), Number(match[2])];
+  }
+
+  // A read answers for today only: every one of these values resets at
+  // midnight, so yesterday's "40/60" says nothing about today.
+  function statsAreCurrent(stats) {
+    if (!stats || typeof stats.at !== "number") return false;
+    const dayKey = date =>
+      `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(date.getDate()).padStart(2, "0")}`;
+    return dayKey(new Date(stats.at)) === dayKey(new Date());
+  }
+
+  // The earn bar: the search-points pair ("40/60") as a fill. Hidden until a
+  // today-fresh read carries a pair — a stale read has no bar worth showing.
+  function renderEarnBar() {
+    const pair = progressPair(lastStatsSeen && lastStatsSeen.searchPoints);
+    const show = statsAreCurrent(lastStatsSeen) && !!pair;
+    searchPointsBar.hidden = !show;
+    if (!show) return;
+    const pct = pair[1] > 0 ? (pair[0] / pair[1]) * 100 : 0;
+    const clamped = Math.min(100, Math.max(0, pct));
+    todayEarnFill.style.setProperty("--fill", `${clamped}%`);
+    todayEarnFill.classList.toggle("is-done", pair[0] >= pair[1]);
+  }
+
   function renderStats(lastStats) {
     lastStatsSeen = lastStats || null;
     const stats = lastStats || {};
@@ -1568,6 +1619,8 @@ document.addEventListener("DOMContentLoaded", async () => {
       bingAppBanner.title =
         "This one only counts from the Bing phone app — the routine can't finish it for you.";
     }
+    // The bar rides on the same read the rows above just took.
+    renderEarnBar();
     // The banner pushes every card down, so the fold moves with it.
     syncHeight();
 

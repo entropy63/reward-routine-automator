@@ -360,7 +360,7 @@
           </label>
         </div>
 
-        <div class="fields">
+        <div class="fields" id="searchesPerBatchField">
           <div class="field field-wide">
             <label for="searchesPerBatch">Searches per batch</label>
             <div class="input-wrap">
@@ -439,28 +439,46 @@
             Refresh
           </button>
         </div>
-        <dl class="stats-grid">
-          <div class="stat">
-            <dt>Available points</dt>
-            <dd id="statAvailablePoints" class="is-empty">—</dd>
+        <!-- The hero and its three secondary stats, side by side (user request
+             2026-09-07): the big Available points number on the left, and
+             Ready to claim / Daily streak / Stamp bonus stacked to its right.
+             The hero itself was lifted from the third build's Today card. -->
+        <div class="today-topline">
+          <div class="today-hero">
+            <span class="today-hero-label">Available points</span>
+            <span class="today-hero-value" id="statAvailablePoints">—</span>
           </div>
-          <div class="stat">
-            <dt>Ready to claim</dt>
-            <dd id="statReadyToClaim" class="is-empty">—</dd>
+          <!-- The centred barrier between the hero and its stats (user request
+               2026-09-07). Purely decorative, so aria-hidden. -->
+          <span class="today-divider" aria-hidden="true"></span>
+          <dl class="stats-grid">
+            <div class="stat">
+              <dt>Ready to claim</dt>
+              <dd id="statReadyToClaim" class="is-empty">—</dd>
+            </div>
+            <div class="stat">
+              <dt>Daily streak</dt>
+              <dd id="statDailyStreak" class="is-empty">—</dd>
+            </div>
+            <div class="stat">
+              <dt>Stamp bonus</dt>
+              <dd id="statStampBonus" class="is-empty">—</dd>
+            </div>
+          </dl>
+        </div>
+        <!-- The earn bar (user request 2026-09-07, lifted from the third
+             build): the search-points cap ("40/60") as a fill, green when the
+             cap is met. Hidden until a today-fresh read carries a pair — a
+             stale read has no bar worth showing. -->
+        <div class="today-earn" id="searchPointsBar" hidden>
+          <div class="today-earn-head">
+            <span>Search points</span>
+            <span class="today-earn-value" id="statSearchPoints">—</span>
           </div>
-          <div class="stat">
-            <dt>Daily streak</dt>
-            <dd id="statDailyStreak" class="is-empty">—</dd>
+          <div class="earn-bar" aria-hidden="true">
+            <span class="earn-fill" id="todayEarnFill"></span>
           </div>
-          <div class="stat">
-            <dt>Stamp bonus</dt>
-            <dd id="statStampBonus" class="is-empty">—</dd>
-          </div>
-          <div class="stat">
-            <dt>Search points</dt>
-            <dd id="statSearchPoints" class="is-empty">—</dd>
-          </div>
-        </dl>
+        </div>
         <!-- The four activity streaks in their own sub-section: each shows both
              of the Earn page's streak-card values ("Day 4 of 7 · 1/1"). The
              stamp bonus keeps its row above — it is the Stamp CARD's counter,
