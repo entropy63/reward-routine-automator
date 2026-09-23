@@ -60,6 +60,12 @@ means "the zoomies" alone.
   and a manual button press always runs, whatever the numbers say.
 - **On demand** — run the whole routine, or a single step, from the popup at
   any time, with a live activity log and a running status line.
+- **Dry-run pre-flight** — *(build 3)*. *Run the routine* shows what the run
+  would actually do before it does it: every step listed as *will open* (with
+  the tabs it will open, and how many searches automatic mode needs) or *will
+  skip*, with the verdict's own wording. The startup confirm dialog shows the
+  same list, and Cancel opens nothing. It is built on the routine's own plan
+  code, so the preview cannot disagree with the run.
 - **The prowl** — *(build 5)*. Background search rounds of 2–5 searches on a
   timer of its own, inside a wait window you set (15–45 minutes by default), so
   points keep arriving between routines. On by default; one switch turns it
@@ -68,6 +74,11 @@ means "the zoomies" alone.
   pick, once a day. The wall clock is the trigger, not an alarm: a browser that
   was closed or asleep when the moment passed still runs the owed round on its
   next wake, so the day is never silently lost.
+- **Evening nudge** — *(build 4)*. A notification at a time you pick naming what
+  is still open today, with **Run it** and **Later** buttons on the banner
+  itself — Run it starts the routine on the spot. It stays quiet on a day with
+  nothing left, and it rides the same wall-clock machinery as the scheduled run,
+  so it cannot be missed either.
 - **Search liveness watchdog** — a periodic check that notices a batch has
   stalled and restarts it, instead of leaving it stuck part-way through.
 
@@ -86,10 +97,18 @@ means "the zoomies" alone.
 - **Today** — *(builds 3–5)*. Available points with a count-up, how fresh the
   number is, ready-to-claim, the daily streak and the stamp bonus, search
   progress, today's activity streaks, and an "if the routine ran now" plan.
+- **Streak guard** — *(build 3)*. A "before the day ends" block naming each
+  unfinished streak and the hours left until midnight, shown only when a streak
+  is genuinely at risk. It asks the routine's own done-checks, so it warns about
+  exactly the work the routine would still do.
 - **Last 7 days** — *(builds 4–5)*. A sparkline of recent points, with the
   points goal beside it and the recent points-per-day trend.
 - **Points goal** — *(builds 4–5)*. Set a target and the Today view tracks it:
   the bar, the days left, and the trend you are on.
+- **Goal alert** — *(build 4)*. A notification when the goal comes within the
+  lead time you set, and another when it lands, with the real numbers. It fires
+  on the crossing, not on every read, and switching it off takes the banner
+  down with it.
 - **Points history** — *(build 5)*. A chart of the balance over time, on the
   dashboard.
 - **Membership medal** — *(build 5)*. Your Rewards tier, shown beside the
