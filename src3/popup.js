@@ -3,6 +3,24 @@
 // routine itself runs — not a re-implementation that can drift from it.
 import { routinePlan } from "./pure/plan.js";
 import { statsAreCurrent, progressPair, rightSizedCount } from "./pure/verdicts.js";
+import { streakRisk, remainingWording } from "./pure/streaks.js";
+
+// The step titles the plan preview and the pre-flight panel both render.
+// Module scope on purpose: the pre-flight's click handler is wired early in
+// popup init, and a `const` declared further down would still be in its
+// temporal dead zone for a click that lands before init's early awaits finish.
+const PLAN_STEP_TITLES = {
+  claim: "Claim",
+  dailySet: "Daily set",
+  keepEarning: "Keep earning",
+  search: "Web searches",
+  imageSearch: "Image search",
+  // The plan preview filters `stats` out (it IS the read, not a step from the
+  // user's point of view), but the pre-flight lists it — it opens two pages,
+  // so the dry run has to say so. A title here keeps that row from rendering
+  // as a bare lowercase id.
+  stats: "Stats"
+};
 
 document.addEventListener("DOMContentLoaded", async () => {
   // Canonical step ids in default order — mirrors STARTUP_STEPS in background.js.
@@ -179,6 +197,18 @@ document.addEventListener("DOMContentLoaded", async () => {
   const todayEarnFill = document.getElementById("todayEarnFill");
   const planBlock = document.getElementById("planBlock");
   const planList = document.getElementById("planList");
+  // The streak guard (build 3): what is still open today, and the clock.
+  const riskBlock = document.getElementById("riskBlock");
+  const riskList = document.getElementById("riskList");
+  const riskClock = document.getElementById("riskClock");
+  // The dry-run pre-flight (build 3): the Run-the-routine button and the
+  // panel it opens. Nothing runs until Go, and Go only fires the message.
+  const runRoutineBtn = document.getElementById("runRoutineBtn");
+  const preflightPanel = document.getElementById("preflightPanel");
+  const preflightList = document.getElementById("preflightList");
+  const preflightCount = document.getElementById("preflightCount");
+  const preflightGoBtn = document.getElementById("preflightGoBtn");
+  const preflightCancelBtn = document.getElementById("preflightCancelBtn");
   const restockWatcherToggle = document.getElementById("restockWatcherEnabled");
   const scheduledRunToggle = document.getElementById("scheduledRunEnabled");
   const scheduledRunTimeInput = document.getElementById("scheduledRunTime");
@@ -670,7 +700,7 @@ document.addEventListener("DOMContentLoaded", async () => {
   //
   // Both follow the same contract: the popup writes the setting, then tells
   // the worker to reschedule its alarm from what was just written. The worker
-  // reads the setting back itself (syncRedeemWatch/syncScheduledRun), so the
+  // reads the setting back itself (syncRedeemWatch/ensureScheduledRun), so the
   // stored value stays the one truth.
 
   restockWatcherToggle.addEventListener("change", async () => {
@@ -1305,6 +1335,102 @@ document.addEventListener("DOMContentLoaded", async () => {
     });
   });
 
+  // ---------- the dry-run pre-flight (build 3) ----------
+  //
+  // Run the routine is the one button here that opens nothing by itself: it
+  // asks the worker for the dry run and shows the answer beside the button.
+  // Go is what runs, and it runs the worker's own manual sequence — the same
+  // one every other Run-now button feeds into, so there is no second code
+  // path to keep honest. Cancel just closes the panel; nothing was started, so
+  // there is nothing to undo.
+  //
+  // The rows come from the worker (GET_PREFLIGHT), never from the popup's own
+  // plan preview: the panel promises what the RUN would do, and the run's
+  // queue is the worker's enabledStartupOrder(), not the popup's mirror of it.
+  function closePreflight() {
+    preflightPanel.hidden = true;
+    runRoutineBtn.setAttribute("aria-expanded", "false");
+    syncHeight();
+  }
+
+  function renderPreflight(rows) {
+    const willRun = rows.filter(r => r.willRun);
+    preflightCount.textContent = willRun.length
+      ? `${willRun.length} of ${rows.length} ${rows.length === 1 ? "step" : "steps"}`
+      : "nothing to do";
+    preflightList.replaceChildren(
+      ...rows.map(row => {
+        const li = document.createElement("li");
+        li.className = row.willRun ? "preflight-step" : "preflight-step is-skip";
+        const head = document.createElement("div");
+        head.className = "preflight-title";
+        const title = document.createElement("span");
+        // PLAN_STEP_TITLES is declared further down this same callback; it is
+        // read here only at click time, long after it is initialized.
+        title.textContent = PLAN_STEP_TITLES[row.id] || row.id;
+        const verdict = document.createElement("span");
+        verdict.className = "preflight-verdict";
+        // The two halves the panel promises: what it will open, or why it
+        // won't. A skipped step never carries an opens list — there is nothing
+        // to show, so the heading says it in the verdict's own words.
+        verdict.textContent = row.willRun ? "will open" : row.reason || "will skip";
+        head.append(title, verdict);
+        li.append(head);
+        if (row.opens.length) {
+          const opens = document.createElement("ul");
+          opens.className = "preflight-opens";
+          opens.append(
+            ...row.opens.map(line => {
+              const item = document.createElement("li");
+              item.textContent = line;
+              return item;
+            })
+          );
+          li.append(opens);
+        }
+        return li;
+      })
+    );
+  }
+
+  runRoutineBtn.addEventListener("click", async () => {
+    // Second press closes it — the button toggles, like the search gear.
+    if (!preflightPanel.hidden) {
+      closePreflight();
+      return;
+    }
+    preflightCount.textContent = "reading…";
+    preflightList.replaceChildren();
+    preflightPanel.hidden = false;
+    runRoutineBtn.setAttribute("aria-expanded", "true");
+    syncHeight();
+    try {
+      const res = await chrome.runtime.sendMessage({ type: "GET_PREFLIGHT" });
+      if (!res || !res.ok || !Array.isArray(res.rows)) {
+        throw new Error((res && res.error) || "no pre-flight rows");
+      }
+      renderPreflight(res.rows);
+    } catch (e) {
+      // The panel stays open with the reason in it rather than silently
+      // closing: an empty dry run and a failed one must not look alike.
+      preflightCount.textContent = "could not read the plan";
+      preflightList.replaceChildren();
+      console.warn("Pre-flight failed:", e);
+    }
+    syncHeight();
+  });
+
+  preflightGoBtn.addEventListener("click", () => {
+    // Manual on the worker side, so the launch gates do not apply — the press
+    // is the consent. The run outlives the popup, so there is nothing to wait
+    // for: close the panel and let the cards report as it goes.
+    chrome.runtime.sendMessage({ type: "RUN_FULL_ROUTINE" }).catch(() => {});
+    setLog(lastRewardsEl, "Routine — starting…", null);
+    closePreflight();
+  });
+
+  preflightCancelBtn.addEventListener("click", closePreflight);
+
   stopBtn.addEventListener("click", () => {
     chrome.runtime.sendMessage({ type: "STOP_BATCH" }, () => {
       updateStatus({ running: false, remaining: 0 });
@@ -1636,14 +1762,12 @@ document.addEventListener("DOMContentLoaded", async () => {
   // read itself, never a "step" from the user's point of view) and disabled
   // steps don't appear; the whole block hides until a today-fresh read
   // exists, because a stale read has no verdicts to show.
-  const PLAN_STEP_TITLES = {
-    claim: "Claim",
-    dailySet: "Daily set",
-    keepEarning: "Keep earning",
-    search: "Web searches",
-    imageSearch: "Image search"
-  };
-
+  //
+  // PLAN_STEP_TITLES lives at module scope (top of this file), not here: the
+  // pre-flight panel renders with it too, and that handler is wired above this
+  // point. A `const` down here would be in its temporal dead zone for any
+  // click that lands before popup init finishes its early awaits — which is a
+  // real click, not a hypothetical one.
   function renderPlan() {
     const stepEnabled = id => {
       const input = document.getElementById(ENABLED_KEY[id]);
@@ -1670,6 +1794,40 @@ document.addEventListener("DOMContentLoaded", async () => {
     // The block appearing or leaving moves the fold; while it stays, the
     // re-render is called from places that re-measure anyway.
     syncHeight();
+  }
+
+  // The streak guard (build 3): the "Before the day ends" block. It reuses
+  // the routine's own verdicts via streakRisk(), so every row it names is a
+  // step the routine would still run — the block is not a second opinion, it
+  // is the same opinion said earlier. Hidden unless a today-fresh read exists
+  // AND something is genuinely open: "nothing at risk" and "nothing known"
+  // must look the same (absent), which streakRisk's null already distinguishes
+  // for us.
+  function renderStreakGuard(stats) {
+    const risk = streakRisk(stats);
+    const show = !!risk && risk.atRisk.length > 0;
+    riskBlock.hidden = !show;
+    if (!show) {
+      riskList.replaceChildren();
+      return;
+    }
+    riskClock.textContent = remainingWording(risk.minutesLeft);
+    riskList.replaceChildren(
+      ...risk.atRisk.map(row => {
+        const li = document.createElement("li");
+        li.className = "plan-step";
+        const title = document.createElement("span");
+        title.className = "plan-title";
+        title.textContent = row.label;
+        const detail = document.createElement("span");
+        detail.className = "plan-verdict";
+        // No number from the read means no number shown — an unread streak is
+        // still a streak to close, so the row stays, just without the count.
+        detail.textContent = row.detail == null ? "still open" : row.detail;
+        li.append(title, detail);
+        return li;
+      })
+    );
   }
 
   // Display strings exactly as the dashboard showed them, plus a plain HH:MM
@@ -1711,8 +1869,10 @@ document.addEventListener("DOMContentLoaded", async () => {
         "This one only counts from the Bing phone app — the routine can't finish it for you.";
     }
     // The banner pushes every card down, so the fold moves with it — and the
-    // earn bar and plan preview below just got their verdicts too.
+    // earn bar, the streak guard and the plan preview below just got their
+    // verdicts too.
     renderEarnBar();
+    renderStreakGuard(stats);
     renderPlan();
     syncHeight();
 

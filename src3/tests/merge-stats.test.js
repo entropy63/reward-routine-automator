@@ -83,3 +83,23 @@ test("two empty reads merge to an all-null record", () => {
     visualSearch: null
   });
 });
+
+test("the keep-earning counts come from the Earn read, with the dashboard as fallback", () => {
+  // Earn's counts win (that is where the section lives)…
+  assert.deepEqual(
+    mergeStats({ keepEarning: { open: 2, total: 5 } }, { keepEarning: { open: 0, total: 3 } }).keepEarning,
+    { open: 0, total: 3 }
+  );
+  // …and answer when only the dashboard found the section
+  assert.deepEqual(mergeStats({ keepEarning: { open: 1, total: 2 } }, {}).keepEarning, {
+    open: 1,
+    total: 2
+  });
+  // a miss on either side never erases the other's
+  assert.deepEqual(mergeStats({}, { keepEarning: { open: 0, total: 6 } }).keepEarning, {
+    open: 0,
+    total: 6
+  });
+  // unread everywhere → null, which is "unknown", never a verdict
+  assert.equal(mergeStats({}, {}).keepEarning, null);
+});

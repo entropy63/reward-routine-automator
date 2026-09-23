@@ -22,6 +22,11 @@
         <h1>Bing Rewards routine</h1>
       </div>
       <p class="message">Starting the daily routine…</p>
+      <!-- The dry run (build 3): what this routine is about to open, and what
+           today's read already has done. Fetched from the worker's own
+           preflight(), so the dialog promises exactly what the run will do.
+           Hidden until the rows answer — nothing here should be guessed. -->
+      <ul class="plan" id="planList" hidden></ul>
       <p class="countdown" id="countdown" role="timer">Starts in 15s</p>
       <div class="actions">
         <button type="button" class="btn btn-primary" id="startBtn">Start now</button>

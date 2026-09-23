@@ -264,6 +264,18 @@
             <span class="earn-fill" id="todayEarnFill"></span>
           </div>
         </div>
+        <!-- The streak guard (build 3): what is still open today and how long
+             is left before the streaks reset. The rows come from the same
+             done-checks the routine uses, so every row here is a step the
+             routine would still run. Hidden unless a today-fresh read exists
+             AND something is actually at risk. -->
+        <div class="risk-block" id="riskBlock" hidden>
+          <div class="risk-head">
+            <span class="group-label">Before the day ends</span>
+            <span class="risk-clock" id="riskClock"></span>
+          </div>
+          <ul class="plan-list" id="riskList"></ul>
+        </div>
         <!-- The plan preview: one line per enabled step, would-run or the
              skip verdict's own wording. Hidden until a today-fresh read
              exists — a stale read has no verdicts. -->
@@ -429,6 +441,30 @@
               </svg>
               <span class="btn-label" id="clearTabsLabel">Clear tabs</span>
             </button>
+          </div>
+        </div>
+        <!-- Run the routine (build 3): the whole startup sequence on demand,
+             behind a dry run. Pressing the button opens the pre-flight panel
+             below instead of starting anything — nothing opens until Go, and
+             the rows come from the worker's own preflight(), so "Will open"
+             is the list the run would actually follow. -->
+        <div class="routine-run">
+          <button type="button" class="btn btn-wide" id="runRoutineBtn" aria-expanded="false">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+              <path d="M5 3l14 9-14 9V3Z" />
+            </svg>
+            Run the routine
+          </button>
+          <div class="preflight" id="preflightPanel" hidden>
+            <p class="preflight-head">
+              <span class="group-label">Dry run</span>
+              <span class="preflight-count" id="preflightCount"></span>
+            </p>
+            <ul class="preflight-list" id="preflightList"></ul>
+            <div class="preflight-actions">
+              <button type="button" class="btn btn-primary" id="preflightGoBtn">Go</button>
+              <button type="button" class="btn btn-quiet" id="preflightCancelBtn">Cancel</button>
+            </div>
           </div>
         </div>
         <!-- Search settings (the gear in the Search button above opens

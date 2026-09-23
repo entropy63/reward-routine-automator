@@ -55,9 +55,12 @@ export const DEFAULT_SETTINGS = {
   keepEarningMaxTiles: 0,          // 0 = however many are there today
 
   // The scheduled daily run (ADR-019): start the routine at a fixed local
-  // time, independent of the launch-time routine. Fires only while Chrome
-  // is running; a fire missed while the browser was closed runs on the next
-  // browser start (the once-per-day gate keeps it from doubling up).
+  // time, independent of the launch-time routine. The WALL CLOCK is what
+  // decides, not alarm delivery: a heartbeat alarm plus every worker wake
+  // re-ask the pure scheduledDue() check, so a browser closed (or a PC asleep)
+  // through the configured moment still runs the owed round the next time
+  // Chrome is up — no silent lost day. The once-per-day gate keeps it from
+  // doubling up with the launch routine.
   scheduledRunEnabled: false,
   scheduledRunTime: "09:00",       // local "HH:MM", 24-hour
 

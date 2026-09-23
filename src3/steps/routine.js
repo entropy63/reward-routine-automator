@@ -76,6 +76,17 @@ export function normalizeStartupOrder(order) {
   return slotMissingDefaults(order, DEFAULT_STARTUP_ORDER);
 }
 
+// The steps this settings blob would actually run, in order: the saved order
+// normalized, then filtered by each step's own toggle. ONE definition, two
+// callers — the routine's own queue below and the dry-run pre-flight — so the
+// list a user is shown before pressing Go is literally the list that would
+// run, not a re-derivation of it.
+export function enabledStartupOrder(settings) {
+  return normalizeStartupOrder(settings.startupOrder).filter(
+    id => settings[STARTUP_STEPS[id].enabledKey]
+  );
+}
+
 // The routine's opening reads, as one step: the Rewards stats (dashboard +
 // Earn pages, merged) and the redeem watch. Grouped because the popup's
 // Refresh button asks for the same two reads together, and neither throws —
@@ -112,10 +123,11 @@ async function reportSkippedStep(id, reason) {
     search: "Search",
     claim: "Claim",
     dailySet: "Daily set",
+    keepEarning: "Keep earning",
     imageSearch: "Image search"
   };
   const detail = `${labels[id] || id} — skipped, ${reason}`;
-  if (id === "claim" || id === "dailySet") {
+  if (id === "claim" || id === "dailySet" || id === "keepEarning") {
     await setLastRewards(detail, null);
   } else if (id === "imageSearch") {
     await reportImageSearch(`skipped, ${reason}`, null);
@@ -268,7 +280,23 @@ export function routineSkippedQuery(skipped) {
 
 // ---------- The sequence ----------
 
-export async function runStartupSequence() {
+// The sequence. Two opt-outs of the LAUNCH gates, and they are not the same
+// opt-out:
+//
+//   manual     (the popup's "Run the routine" button) skips all three — the
+//              master switch, the once-per-day skip and the confirm dialog —
+//              because a button press is an explicit user action.
+//   scheduled  (the daily timed run) skips the master switch and the confirm
+//              dialog but KEEPS the once-per-day skip: the time the user set
+//              IS the intent, so an unattended confirm window would auto-
+//              cancel every scheduled round — but a round that already ran
+//              today (a morning startup, say) must not be doubled.
+//
+// Everything else is identical either way: the per-step skip-when-done
+// verdicts still apply (no search batch at 60/60), a Stop still cancels, the
+// finish page still opens, and a genuinely finished routine still marks its
+// day (so the launch routine does not redo what the manual one completed).
+export async function runStartupSequence({ manual = false, scheduled = false } = {}) {
   const settings = await getSettings();
 
   // A stop during an earlier step must also cancel the steps not started yet:
@@ -285,14 +313,16 @@ export async function runStartupSequence() {
     state.captures = { capturing: [], opened: {} };
   });
 
-  if (!settings.startupEnabled) return;
+  if (!manual && !scheduled && !settings.startupEnabled) return;
 
   // Once per day: if the routine already completed today, don't redo it on a
   // second browser launch. The stale-state cleanup above has already run by
   // here, which is what we want either way — the skip is the whole routine.
   // (LAST_ROUTINE_DAY stays a key of its own, outside the document: it is
   // the whole point that it survives stops, updates and evictions.)
-  if (settings.startupOncePerDay) {
+  // A scheduled run keeps this gate on purpose: the schedule is a second way
+  // to reach the same once-a-day routine, not a way around it.
+  if (!manual && settings.startupOncePerDay) {
     const { [LAST_ROUTINE_DAY]: lastDay } = await chrome.storage.local.get(
       LAST_ROUTINE_DAY
     );
@@ -306,8 +336,15 @@ export async function runStartupSequence() {
   // cancel before a single tab opens. It sits after the once-per-day skip on
   // purpose — there is nothing to ask about when the routine would not run
   // anyway — and before the routine field is set, so a cancel leaves nothing
-  // routine-shaped behind.
-  if (settings.confirmBeforeRoutine && !(await confirmRoutineStart())) {
+  // routine-shaped behind. A manual run skips it (the button IS the answer)
+  // and so does a scheduled one (nobody is there to press it, and the time the
+  // user configured is itself the consent).
+  if (
+    !manual &&
+    !scheduled &&
+    settings.confirmBeforeRoutine &&
+    !(await confirmRoutineStart())
+  ) {
     // Cancel: same shape as the once-per-day skip above — stale state away,
     // nothing routine-shaped left. lastRoutineDay is NOT written: today does
     // not count as done, so the next launch retries the routine.
@@ -319,9 +356,7 @@ export async function runStartupSequence() {
     return;
   }
 
-  const queue = normalizeStartupOrder(settings.startupOrder).filter(
-    id => settings[STARTUP_STEPS[id].enabledKey]
-  );
+  const queue = enabledStartupOrder(settings);
 
   // Marks every step below as part of the routine, so in routine mode their
   // tabs are stashed for endRoutine() instead of closed per step. The start

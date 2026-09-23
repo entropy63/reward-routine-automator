@@ -56,6 +56,15 @@ export const STEP_DONE_CHECKS = {
     const done = streakDone((stats.activities || {}).dailySet);
     return done && `already ${done}`;
   },
+  // The Earn read counts the section's still-open tiles ({open, total}).
+  // Skip only when a section that answered shows every tile spent — an
+  // unread (null) or empty section never skips, the same
+  // only-wrong-answer-is-skipping-something-not-done rule as the rest.
+  keepEarning: stats => {
+    const counts = stats.keepEarning;
+    if (!counts || typeof counts.total !== "number" || counts.total <= 0) return null;
+    return counts.open > 0 ? null : `all ${counts.total} activities done`;
+  },
   // The image search earns the visual-search streak's one point.
   imageSearch: stats => {
     const done = streakDone((stats.activities || {}).visualSearch);
