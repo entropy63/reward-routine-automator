@@ -23,6 +23,9 @@ playwright.config.js
 # --- archives and old snapshots ---
 *.zip
 *.7z
+# The whole archive-history folder stays local (a stray copy without a .zip
+# extension would otherwise slip past the rules above).
+old zips/
 
 # --- local scratch ---
 models.md
@@ -35,3 +38,17 @@ tasks/
 !src2/**
 !src3/**
 !src4/**
+
+# --- src5 "the zoomies" is a Vite/TypeScript build. Commit its SOURCE (the
+# broad tests/ package.json *.html rules above would otherwise swallow it),
+# but NOT the two generated trees: node_modules (deps) and dist (the build
+# output). The built, loadable extension is distributed via GitHub Releases
+# (the "the zoomies V<version>.zip" asset), so it never needs to live in the
+# repo — anyone can reproduce it with `npm --prefix src5 ci && run build`. ---
+!src5/**
+src5/node_modules/
+src5/dist/
+
+# --- deepseek-harness is a separate, unrelated project that happens to sit
+# in this working tree; it must never be committed here ---
+deepseek-harness/
