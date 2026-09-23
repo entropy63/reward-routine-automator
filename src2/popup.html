@@ -2,7 +2,7 @@
 <html lang="en">
   <head>
     <meta charset="UTF-8" />
-    <title>Reward Routine Automator (src2)</title>
+    <title>the pounce</title>
     <link rel="stylesheet" href="popup.css" />
     <!-- Deliberately not deferred: it sizes the window before the first paint. -->
     <script src="popup-boot.js"></script>
@@ -360,7 +360,7 @@
           </label>
         </div>
 
-        <div class="fields">
+        <div class="fields" id="searchesPerBatchField">
           <div class="field field-wide">
             <label for="searchesPerBatch">Searches per batch</label>
             <div class="input-wrap">
@@ -439,34 +439,46 @@
             Refresh
           </button>
         </div>
-        <dl class="stats-grid">
-          <div class="stat">
-            <dt>Available points</dt>
-            <dd id="statAvailablePoints" class="is-empty">—</dd>
+        <!-- The hero and its three secondary stats, side by side (user request
+             2026-09-07): the big Available points number on the left, and
+             Ready to claim / Daily streak / Stamp bonus stacked to its right.
+             The hero itself was lifted from the third build's Today card. -->
+        <div class="today-topline">
+          <div class="today-hero">
+            <span class="today-hero-label">Available points</span>
+            <span class="today-hero-value" id="statAvailablePoints">—</span>
           </div>
-          <div class="stat">
-            <dt>Ready to claim</dt>
-            <dd id="statReadyToClaim" class="is-empty">—</dd>
+          <!-- The centred barrier between the hero and its stats (user request
+               2026-09-07). Purely decorative, so aria-hidden. -->
+          <span class="today-divider" aria-hidden="true"></span>
+          <dl class="stats-grid">
+            <div class="stat">
+              <dt>Ready to claim</dt>
+              <dd id="statReadyToClaim" class="is-empty">—</dd>
+            </div>
+            <div class="stat">
+              <dt>Daily streak</dt>
+              <dd id="statDailyStreak" class="is-empty">—</dd>
+            </div>
+            <div class="stat">
+              <dt>Stamp bonus</dt>
+              <dd id="statStampBonus" class="is-empty">—</dd>
+            </div>
+          </dl>
+        </div>
+        <!-- The earn bar (user request 2026-09-07, lifted from the third
+             build): the search-points cap ("40/60") as a fill, green when the
+             cap is met. Hidden until a today-fresh read carries a pair — a
+             stale read has no bar worth showing. -->
+        <div class="today-earn" id="searchPointsBar" hidden>
+          <div class="today-earn-head">
+            <span>Search points</span>
+            <span class="today-earn-value" id="statSearchPoints">—</span>
           </div>
-          <div class="stat">
-            <dt>Daily streak</dt>
-            <dd id="statDailyStreak" class="is-empty">—</dd>
+          <div class="earn-bar" aria-hidden="true">
+            <span class="earn-fill" id="todayEarnFill"></span>
           </div>
-          <div class="stat">
-            <dt>Stamp bonus</dt>
-            <dd id="statStampBonus" class="is-empty">—</dd>
-          </div>
-          <div class="stat stat-search">
-            <dt>Search points</dt>
-            <dd id="statSearchPoints" class="is-empty">—</dd>
-            <!-- The day's earn bar: the dd's "40 of 60" drawn to scale. Hidden
-                 unless the value carries a readable X/Y pair (renderStats
-                 fills --fill as a percentage). -->
-            <span class="stat-bar" id="searchPointsBar" hidden>
-              <span class="stat-bar-fill"></span>
-            </span>
-          </div>
-        </dl>
+        </div>
         <!-- The four activity streaks in their own sub-section: each shows both
              of the Earn page's streak-card values ("Day 4 of 7 · 1/1"). The
              stamp bonus keeps its row above — it is the Stamp CARD's counter,
@@ -491,16 +503,6 @@
               <dd id="statVisualSearch" class="is-empty">—</dd>
             </div>
           </dl>
-        </div>
-        <!-- Today's plan: what the startup routine would do RIGHT NOW, computed
-             by the same verdicts the routine itself runs (popup.js imports
-             pure/plan.js). The stats read is the input, so it lives in this
-             card; the stats step itself is a read, not a chore, and stays out.
-             renderPlan() fills the rows and hides the block when the read is
-             not from today (the verdicts refuse to judge a stale read). -->
-        <div id="planBlock" hidden>
-          <p class="group-label">Left today</p>
-          <ul class="plan-list" id="planList"></ul>
         </div>
         <p class="note" id="statsUpdated">Not yet updated</p>
       </section>
@@ -561,23 +563,6 @@
           </button>
         </div>
         <p class="note" id="redeemNote">Refresh in Stats reads your points and the amounts.</p>
-        <!-- The restock watcher (3.1): the redeem watch re-checked on a
-             background alarm, so the banners above stay fresh without opening
-             the popup. Opt-in — it opens a background tab each round. -->
-        <div class="opts opts-card">
-          <label class="opt">
-            <span class="opt-text">
-              Watch for restocks
-              <span class="note">Re-check the redeem page every 2 hours; banner the flips.</span>
-            </span>
-            <span class="switch switch-sm">
-              <input type="checkbox" id="restockWatcherEnabled" />
-              <span class="switch-track" aria-hidden="true">
-                <span class="switch-thumb"></span>
-              </span>
-            </span>
-          </label>
-        </div>
       </section>
 
       <!-- Below the fold on purpose: the popup is clamped to this card's top
@@ -1261,6 +1246,6 @@
       </section>
     </main>
 
-    <script type="module" src="popup.js"></script>
+    <script src="popup.js"></script>
   </body>
 </html>

@@ -55,6 +55,11 @@ export function mergeStats(dashboard, earn) {
     // and both answers are today's truth — whichever page's breakdown
     // answered wins, a miss never erasing the other page's find.
     searchPoints: firstNonNull("searchPoints", a, b),
-    activities
+    activities,
+    // The keep-earning counts are Earn-page data (that is where the section
+    // lives), so the Earn read wins; the dashboard's answer stays as the
+    // fallback for the odd account that renders it there instead. An object
+    // rather than a string, so firstNonNull cannot carry it.
+    keepEarning: b.keepEarning != null ? b.keepEarning : a.keepEarning != null ? a.keepEarning : null
   };
 }

@@ -55,8 +55,23 @@ test("stepSkipReason names the done wording per step", () => {
     stepSkipReason("imageSearch", { activities: { visualSearch: "1/1" } }),
     "already 1/1"
   );
-  // A step with no done-check (stats, keepEarning) never skips.
+  // A step with no done-check (stats) never skips.
   assert.equal(stepSkipReason("stats", { searchPoints: "60/60" }), null);
+});
+
+test("the keep-earning verdict skips only a fully spent, answered section", () => {
+  // all spent → skip, with the count in the reason
+  assert.equal(
+    stepSkipReason("keepEarning", { keepEarning: { open: 0, total: 4 } }),
+    "all 4 activities done"
+  );
+  // still-open tiles → run
+  assert.equal(stepSkipReason("keepEarning", { keepEarning: { open: 1, total: 4 } }), null);
+  // unread section → unknown, never a skip
+  assert.equal(stepSkipReason("keepEarning", {}), null);
+  assert.equal(stepSkipReason("keepEarning", { keepEarning: null }), null);
+  // a section that answered with nothing usable is not "done" either
+  assert.equal(stepSkipReason("keepEarning", { keepEarning: { open: 0, total: 0 } }), null);
 });
 
 test("rightSizedCount trims to the day's remainder from today's read", () => {

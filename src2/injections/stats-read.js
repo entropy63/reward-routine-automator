@@ -28,7 +28,8 @@ export function readRewardsStats(timeoutMs, waitMode) {
           dailySet: null,
           bingApp: null,
           visualSearch: null
-        }
+        },
+        keepEarning: null
       };
     }
 
@@ -453,6 +454,137 @@ export function readRewardsStats(timeoutMs, waitMode) {
       pressButton(card);
     }
 
+    // The Keep-earning section's verdict counts, mirroring the keep-earning
+    // step's opener (injections/rewards-tiles.js) filter for filter — the
+    // same heading match, the same scope walk, the same tile exclusions — so
+    // the count can never disagree with what the step would actually click.
+    // "open" counts the tiles the step would still open (not completed, not
+    // "reward up only"); "total" counts the usable tiles the section holds.
+    // null when the section is not on this page or has not rendered (or
+    // opened) yet — an unknown is never a verdict.
+    const KEEP_EARNING_NAMES = [
+      "keep earning",
+      "more activities",
+      "more ways to earn"
+    ];
+    const KE_SPENT_MARKERS = ["completed", "reward up only"];
+
+    function keepEarningHeading() {
+      const headings = Array.from(
+        document.querySelectorAll('h1, h2, h3, h4, [role="heading"]')
+      );
+      const tests = [
+        h => KEEP_EARNING_NAMES.includes(textOf(h).toLowerCase()),
+        h =>
+          KEEP_EARNING_NAMES.some(name =>
+            textOf(h).toLowerCase().startsWith(name)
+          ),
+        h =>
+          KEEP_EARNING_NAMES.some(name =>
+            textOf(h).toLowerCase().includes(name)
+          )
+      ];
+      for (const test of tests) {
+        const found = headings.find(test);
+        if (found) return found;
+      }
+      return null;
+    }
+
+    function keIsDisabled(el) {
+      return (
+        el.getAttribute("aria-disabled") === "true" ||
+        el.hasAttribute("data-disabled")
+      );
+    }
+
+    function keCandidatesIn(scope) {
+      const all = Array.from(
+        scope.querySelectorAll(
+          'a[href], button, div[role="button"], [role="link"]'
+        )
+      );
+      return all.filter(el => !all.some(other => other !== el && other.contains(el)));
+    }
+
+    function keFindScope(heading) {
+      const disclosure = heading.closest(".react-aria-Disclosure");
+      if (disclosure) {
+        const panel = disclosure.querySelector(".react-aria-DisclosurePanel");
+        if (panel) return { scope: panel, panelId: panel.id };
+      }
+
+      let node = heading.parentElement;
+      for (let depth = 0; node && depth < 6; depth++, node = node.parentElement) {
+        const own = keCandidatesIn(node).filter(
+          el => !el.contains(heading) && !heading.contains(el)
+        );
+        if (own.length >= 2) return { scope: node, panelId: "" };
+      }
+      return null;
+    }
+
+    function keepEarningCount() {
+      const heading = keepEarningHeading();
+      if (!heading) return null;
+
+      const found = keFindScope(heading);
+      if (!found) return null;
+
+      const candidates = keCandidatesIn(found.scope);
+      // A collapsed section renders no tiles at all — same shape as "not
+      // here yet", and the one-shot expansion below is what fixes it.
+      if (!candidates.length) return null;
+
+      const tiles = candidates.filter(el => {
+        const body = textOf(el).toLowerCase();
+        const aria = (el.getAttribute("aria-label") || "").toLowerCase();
+        const controls = el.getAttribute("aria-controls") || "";
+
+        const isSectionChrome =
+          (found.panelId && controls === found.panelId) ||
+          el.contains(heading) ||
+          heading.contains(el) ||
+          KEEP_EARNING_NAMES.some(name => aria.includes(name));
+        const isMeta =
+          body.includes("expires in") ||
+          (el.tagName === "BUTTON" &&
+            KEEP_EARNING_NAMES.some(name => body.includes(name)));
+        const href = (el.getAttribute("href") || "").toLowerCase();
+        const isImageCreator =
+          href.includes("bing.com/images/create") ||
+          body.includes("image creator") ||
+          body.includes("create and download");
+
+        return !isSectionChrome && !isMeta && !keIsDisabled(el) && !isImageCreator;
+      });
+
+      const open = tiles.filter(
+        el =>
+          !KE_SPENT_MARKERS.some(marker =>
+            textOf(el).toLowerCase().includes(marker)
+          )
+      ).length;
+      return { open: open, total: tiles.length };
+    }
+
+    // A collapsed Keep-earning disclosure renders no tiles, so its count
+    // reads null — expand it, the same retry-guarded move as the Streaks
+    // disclosure above and BEFORE the points flyout (which opens modally and
+    // makes the shell inert).
+    let lastKeepEarningClickAt = 0;
+    function expandKeepEarningIfCollapsed() {
+      const heading = keepEarningHeading();
+      if (!heading) return;
+      const disclosure = heading.closest(".react-aria-Disclosure");
+      if (!disclosure) return;
+      const toggle = disclosure.querySelector('[aria-expanded="false"]');
+      if (!toggle || typeof toggle.click !== "function") return;
+      if (Date.now() - lastKeepEarningClickAt < 1000) return;
+      lastKeepEarningClickAt = Date.now();
+      pressButton(toggle);
+    }
+
     function readAll() {
       return {
         // The card first (old design); the header pill answers the redesign
@@ -477,7 +609,10 @@ export function readRewardsStats(timeoutMs, waitMode) {
           visualSearch:
             streakCardValue(/visual search/i) ||
             activityValue("visual search")
-        }
+        },
+        // The Keep-earning section's verdict counts — best-effort like the
+        // breakdown, with its own bounded window in complete().
+        keepEarning: keepEarningCount()
       };
     }
 
@@ -493,6 +628,10 @@ export function readRewardsStats(timeoutMs, waitMode) {
     // the flat 2.5 s bound, the live "it doesn't work" report) — so the read
     // then waits for it up to the same deadline every other value gets (and
     // the caller dumps the panel's markup if even that runs out).
+    // Set by complete() the first poll where the streaks and the breakdown
+    // have both answered — the start of the keep-earning counts' grace window.
+    let keOtherAnsweredAt = 0;
+
     function complete(stats) {
       const cardsAnswered =
         stats.availablePoints != null && stats.dailyStreak != null;
@@ -511,18 +650,31 @@ export function readRewardsStats(timeoutMs, waitMode) {
         breakdownAnswered = true; // never clicked: no card, or not a button
       }
       if (waitMode === "cards") return cardsAnswered && breakdownAnswered;
-      if (waitMode === "streaks") return streaksAnswered && breakdownAnswered;
+      if (waitMode === "streaks") {
+        if (!streaksAnswered || !breakdownAnswered) return false;
+        // The keep-earning counts get a bounded window once everything else
+        // has answered: a collapsed section takes a poll or two to open after
+        // the one-shot click above. A page without the section, or a count
+        // that already answered, never waits; a section that never opens
+        // gives up after the window rather than holding the read to the
+        // deadline.
+        if (stats.keepEarning != null || !keepEarningHeading()) return true;
+        if (!keOtherAnsweredAt) keOtherAnsweredAt = Date.now();
+        return Date.now() - keOtherAnsweredAt > 3000;
+      }
       return cardsAnswered && streaksAnswered && breakdownAnswered;
     }
 
     function poll() {
       // Before each read: a collapsed Streaks disclosure is worth clicking
       // (a collapsed panel renders none of the cards we are after) — and so
-      // is the Today's points card's collapsed breakdown. The ORDER is
-      // load-bearing: the breakdown's flyout is modal (the shell goes inert),
-      // so the streaks click must land first — see
+      // is a collapsed Keep-earning section (its verdict counts need the
+      // tiles), and the Today's points card's collapsed breakdown. The ORDER
+      // is load-bearing: the breakdown's flyout is modal (the shell goes
+      // inert), so both disclosure clicks must land first — see
       // streaksResolvedBeforeFlyout.
       expandStreaksIfCollapsed();
+      expandKeepEarningIfCollapsed();
       expandPointsBreakdownIfCollapsed();
 
       // The press log watches every poll, so a flyout that opens and closes

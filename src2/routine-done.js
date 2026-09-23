@@ -31,6 +31,7 @@ const STEP_NAMES = {
   search: "Search",
   claim: "Claim",
   dailySet: "Daily set",
+  keepEarning: "Keep earning",
   imageSearch: "Image search"
 };
 

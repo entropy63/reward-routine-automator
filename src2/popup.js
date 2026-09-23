@@ -1,11 +1,3 @@
-// The popup shares the routine's own verdict code (ADR-018): the "Left
-// today" plan and the search-points earn bar are computed by the same pure
-// functions the worker runs, so what the popup says can never drift from
-// what the routine would actually do. A module script for exactly this
-// import; popup-boot.js stays classic (it must run before the first paint).
-import { routinePlan } from "./pure/plan.js";
-import { progressPair, rightSizedCount, statsAreCurrent } from "./pure/verdicts.js";
-
 document.addEventListener("DOMContentLoaded", async () => {
   // Canonical step ids in default order — mirrors STARTUP_STEPS in background.js.
   const STEP_IDS = ["stats", "claim", "dailySet", "keepEarning", "search", "imageSearch"];
@@ -143,13 +135,6 @@ document.addEventListener("DOMContentLoaded", async () => {
   // picker (renderRedeem) is their only home now.
   const refreshStatsBtn = document.getElementById("refreshStatsBtn");
   const statsUpdatedEl = document.getElementById("statsUpdated");
-  // Today's plan (the Stats card's verdict block) and the earn bar under the
-  // search-points value.
-  const planBlock = document.getElementById("planBlock");
-  const planList = document.getElementById("planList");
-  const searchPointsBar = document.getElementById("searchPointsBar");
-  // The restock watcher's toggle (the Redeem card).
-  const restockWatcherToggle = document.getElementById("restockWatcherEnabled");
   const redeemSelect = document.getElementById("redeemVariant");
   const redeemBtn = document.getElementById("redeemBtn");
   const redeemBtnLabelEl = document.getElementById("redeemBtnLabel");
@@ -181,16 +166,17 @@ document.addEventListener("DOMContentLoaded", async () => {
     bingApp: document.getElementById("statBingApp"),
     visualSearch: document.getElementById("statVisualSearch")
   };
+  // The earn bar's own two nodes (user request 2026-09-07): the value inside
+  // it is statSearchPoints above, written by renderStats like every other
+  // stat — these are the container it hides with and the fill it sizes.
+  const searchPointsBar = document.getElementById("searchPointsBar");
+  const todayEarnFill = document.getElementById("todayEarnFill");
 
   // One drag-reorder implementation, three lists (makeSortableList, below):
   // each instance owns its own drag/settle state, so the lists never interact.
   const startupOrderList = makeSortableList(stepList, {
     idKey: "step",
-    save: order => {
-      patchSettings({ startupOrder: order });
-      // The plan follows the configured order — re-derive it.
-      renderPlan(lastStatsSeen);
-    }
+    save: order => patchSettings({ startupOrder: order })
   });
   const querySourceList = makeSortableList(sourceList, {
     idKey: "source",
@@ -279,7 +265,6 @@ document.addEventListener("DOMContentLoaded", async () => {
   refreshOnOpenToggle.checked = effectiveSettings.refreshStatsOnPopupOpen ?? true;
   devToggle.checked = effectiveSettings.developerOptionsEnabled ?? false;
   experimentalToggle.checked = effectiveSettings.experimentalFeatures ?? false;
-  restockWatcherToggle.checked = effectiveSettings.restockWatcherEnabled ?? false;
 
   // Unknown ids are dropped and duplicates collapse by construction (the
   // filter walks SECTION_IDS, not the stored list); the hide order is kept.
@@ -293,6 +278,9 @@ document.addEventListener("DOMContentLoaded", async () => {
   const automaticMode = effectiveSettings.rightSizeSearchBatch ?? true;
   searchModeManual.checked = !automaticMode;
   searchModeAutomatic.checked = automaticMode;
+  // Automatic right-sizes the batch itself, so its manual size field is hidden
+  // (the CSS keys off this attribute); manual mode shows it.
+  searchSettingsEl.dataset.batchMode = automaticMode ? "automatic" : "manual";
   minDelayInput.value = effectiveSettings.minDelaySec ?? 5;
   maxDelayInput.value = effectiveSettings.maxDelaySec ?? 15;
   tabCloseDelayInput.value = effectiveSettings.tabCloseDelaySec ?? 8;
@@ -404,8 +392,6 @@ document.addEventListener("DOMContentLoaded", async () => {
       const step = input.closest(".step");
       if (step) replay(step.querySelector(".step-index"), "is-pop");
       patchSettings({ [key]: input.checked });
-      // A step leaving or joining the plan changes the plan.
-      renderPlan(lastStatsSeen);
     });
   });
 
@@ -1204,9 +1190,12 @@ document.addEventListener("DOMContentLoaded", async () => {
   // IS the mode — automatic on, manual off.
   for (const radio of [searchModeManual, searchModeAutomatic]) {
     radio.addEventListener("change", () => {
-      patchSettings({ rightSizeSearchBatch: searchModeAutomatic.checked });
-      // The search verdict's wording depends on the mode.
-      renderPlan(lastStatsSeen);
+      const automatic = searchModeAutomatic.checked;
+      patchSettings({ rightSizeSearchBatch: automatic });
+      // Manual reveals the "Searches per batch" field, automatic hides it. The
+      // panel is open when this fires, so re-measure the popup height.
+      searchSettingsEl.dataset.batchMode = automatic ? "automatic" : "manual";
+      syncHeight();
     });
   }
 
@@ -1296,15 +1285,6 @@ document.addEventListener("DOMContentLoaded", async () => {
     sendRun({ type: "REDEEM_OVERWATCH", url: redeemUrl, label: chosen.value }, () => {
       redeemNoteEl.textContent = "Opening the redeem page…";
     });
-  });
-
-  // The restock watcher's toggle: persist first, then tell the worker to
-  // (re)schedule its alarm from the stored setting — awaited so the worker's
-  // read cannot race the write. The banners the watch feeds are the popup's
-  // own renderers, so nothing else needs doing here.
-  restockWatcherToggle.addEventListener("change", async () => {
-    await patchSettings({ restockWatcherEnabled: restockWatcherToggle.checked });
-    chrome.runtime.sendMessage({ type: "SET_RESTOCK_WATCH" }).catch(() => {});
   });
 
   // ---------- clear tabs ----------
@@ -1585,6 +1565,44 @@ document.addEventListener("DOMContentLoaded", async () => {
 
   // Display strings exactly as the dashboard showed them, plus a plain HH:MM
   // stamp — the read is always recent enough that a date would only add noise.
+  // The earn bar's arithmetic, lifted from the third build's pure/verdicts.js
+  // (user request 2026-09-07). These popups are classic scripts, not modules,
+  // so the two functions are inlined rather than imported — same logic, and a
+  // change to one must be mirrored in the other (the codebase's existing
+  // mirror convention for normalizeOrder / STEP_IDS).
+  //
+  // The trailing "X/Y" pair of a stat value. Both stored shapes end with it
+  // ("3/3" from the tiles, "Day 4 of 7 · 3/3" from the streak cards);
+  // returns [done, total] or null when the value carries no pair.
+  function progressPair(value) {
+    if (typeof value !== "string") return null;
+    const match = value.trim().match(/(\d+)\s*\/\s*(\d+)$/);
+    if (!match) return null;
+    return [Number(match[1]), Number(match[2])];
+  }
+
+  // A read answers for today only: every one of these values resets at
+  // midnight, so yesterday's "40/60" says nothing about today.
+  function statsAreCurrent(stats) {
+    if (!stats || typeof stats.at !== "number") return false;
+    const dayKey = date =>
+      `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(date.getDate()).padStart(2, "0")}`;
+    return dayKey(new Date(stats.at)) === dayKey(new Date());
+  }
+
+  // The earn bar: the search-points pair ("40/60") as a fill. Hidden until a
+  // today-fresh read carries a pair — a stale read has no bar worth showing.
+  function renderEarnBar() {
+    const pair = progressPair(lastStatsSeen && lastStatsSeen.searchPoints);
+    const show = statsAreCurrent(lastStatsSeen) && !!pair;
+    searchPointsBar.hidden = !show;
+    if (!show) return;
+    const pct = pair[1] > 0 ? (pair[0] / pair[1]) * 100 : 0;
+    const clamped = Math.min(100, Math.max(0, pct));
+    todayEarnFill.style.setProperty("--fill", `${clamped}%`);
+    todayEarnFill.classList.toggle("is-done", pair[0] >= pair[1]);
+  }
+
   function renderStats(lastStats) {
     lastStatsSeen = lastStats || null;
     const stats = lastStats || {};
@@ -1621,20 +1639,8 @@ document.addEventListener("DOMContentLoaded", async () => {
       bingAppBanner.title =
         "This one only counts from the Bing phone app — the routine can't finish it for you.";
     }
-    // The day's earn bar under the value: "40 of 60" drawn to scale. No
-    // readable pair (stale read, empty value) leaves it hidden.
-    const pair = progressPair(stats.searchPoints);
-    if (pair && pair[1] > 0) {
-      searchPointsBar.hidden = false;
-      searchPointsBar.style.setProperty(
-        "--fill",
-        `${Math.min(100, Math.round((pair[0] / pair[1]) * 100))}%`
-      );
-      searchPointsBar.classList.toggle("is-done", pair[0] >= pair[1]);
-    } else {
-      searchPointsBar.hidden = true;
-    }
-    renderPlan(stats);
+    // The bar rides on the same read the rows above just took.
+    renderEarnBar();
     // The banner pushes every card down, so the fold moves with it.
     syncHeight();
 
@@ -1650,69 +1656,6 @@ document.addEventListener("DOMContentLoaded", async () => {
     // half of it just changed — re-run the verdict (the amounts half comes
     // from lastRedeem, unchanged here).
     updateRedeemButton();
-  }
-
-  // ---------- Today's plan ----------
-  //
-  // What the startup routine would do RIGHT NOW, computed by the routine's
-  // own verdicts (pure/plan.js) — the popup shows the plan the routine would
-  // execute, not a re-implementation of it. Shown from a fresh read only: a
-  // stale one cannot judge "done today" and every unknown runs, which would
-  // read as "everything to do" and lie. The stats step is the read itself,
-  // not a chore; disabled steps never reach the routine — both stay out.
-
-  const PLAN_STEP_TITLES = {
-    claim: "Claim",
-    dailySet: "Daily set",
-    keepEarning: "Keep earning",
-    search: "Web searches",
-    imageSearch: "Image search"
-  };
-
-  function renderPlan(stats) {
-    if (!statsAreCurrent(stats)) {
-      planBlock.hidden = true;
-      return;
-    }
-
-    const order = startupOrderList.currentOrder().filter(id => {
-      if (id === "stats") return false;
-      const input = document.getElementById(ENABLED_KEY[id]);
-      return input ? input.checked : true;
-    });
-    const plan = routinePlan(stats, order);
-
-    planList.replaceChildren(
-      ...plan.map(({ id, willRun, reason }) => {
-        const li = document.createElement("li");
-        if (!willRun) li.classList.add("is-done");
-
-        const title = document.createElement("span");
-        title.className = "plan-title";
-        title.textContent = PLAN_STEP_TITLES[id] || id;
-
-        const verdict = document.createElement("span");
-        verdict.className = "plan-verdict";
-        if (!willRun) {
-          verdict.classList.add("is-done");
-          verdict.textContent = `✓ ${reason}`;
-        } else if (id === "search" && searchModeAutomatic.checked) {
-          // The one step whose remaining work is a number, and only in
-          // automatic mode — the same right-sizing the batch itself
-          // would apply.
-          const sized = rightSizedCount(stats, Number(searchesInput.value) || 30);
-          verdict.textContent = sized.trimmed
-            ? `${sized.count} ${sized.count === 1 ? "search" : "searches"} to the cap`
-            : "to do";
-        } else {
-          verdict.textContent = "to do";
-        }
-
-        li.append(title, verdict);
-        return li;
-      })
-    );
-    planBlock.hidden = plan.length === 0;
   }
 
   // The Redeem card's half of the lastRedeem read (the Overwatch amounts no

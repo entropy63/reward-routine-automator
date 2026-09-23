@@ -112,10 +112,11 @@ async function reportSkippedStep(id, reason) {
     search: "Search",
     claim: "Claim",
     dailySet: "Daily set",
+    keepEarning: "Keep earning",
     imageSearch: "Image search"
   };
   const detail = `${labels[id] || id} — skipped, ${reason}`;
-  if (id === "claim" || id === "dailySet") {
+  if (id === "claim" || id === "dailySet" || id === "keepEarning") {
     await setLastRewards(detail, null);
   } else if (id === "imageSearch") {
     await reportImageSearch(`skipped, ${reason}`, null);

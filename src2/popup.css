@@ -1356,6 +1356,14 @@ body[data-view="settings"] #showHiddenBtn {
   display: none;
 }
 
+/* Automatic batch mode right-sizes the count itself, so the manual "Searches
+   per batch" field has nothing for the user to set — hide it there (user
+   request 2026-09-07). The stored value survives as the fallback ceiling for
+   when the day's remaining points can't be read; manual mode shows it again. */
+#searchSettings[data-batch-mode="automatic"] #searchesPerBatchField {
+  display: none;
+}
+
 /* The panel's group label is the first thing under its top border, so it
    needs none of the stand-off the Settings view's labels use. */
 .search-settings > .group-label:first-child {
@@ -1661,26 +1669,126 @@ html[data-experimental="on"] #couponBtn {
   grid-template-columns: 1fr;
 }
 
-/* ---------- the search-points earn bar (3.1) ---------- */
-
-/* The day's cap drawn to scale under the value it summarizes: the fill width
-   is the --fill percentage renderStats sets; a complete pair turns it the
-   success green the plan's done verdicts use. */
-.stat-bar {
-  display: block;
-  height: 4px;
-  margin-top: 4px;
-  border-radius: 2px;
-  background: var(--brand-tint);
-  overflow: hidden;
+/* The hero and the earn bar, lifted from the third build's Today card (user
+   request 2026-09-07: "I liked the search points progress bar… also I liked
+   the available points font size"). Both values keep their stats-era ids, so
+   renderStats still writes them through setStat — but they are no longer
+   grid dds, so they carry their own is-empty / is-fresh rules. */
+/* The hero and its three secondary stats share one row (user request
+   2026-09-07: "make Ready to claim / Daily streak / Stamp bonus at the right
+   of the available points"). The big number sits left; the three label/value
+   pairs stack in a single column to its right, values aligned to the popup's
+   right edge. */
+.today-topline {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  margin-top: 8px;
 }
 
-/* display:block above would defeat the hidden attribute without this. */
-.stat-bar[hidden] {
+.today-topline .today-hero {
+  margin-top: 0;
+  flex: 1 1 0;
+  min-width: 0;
+}
+
+/* A thin vertical barrier centred between the hero and the stats (user request
+   2026-09-07: "Add a barrier between the available points and the other
+   stats… Make the barrier in the middle"). The hero and the stats each take an
+   equal half of the row, so the rule lands on the horizontal centre;
+   align-self keeps the short line centred in the row's height. */
+.today-topline .today-divider {
+  flex: 0 0 auto;
+  align-self: center;
+  width: 1px;
+  height: 52px;
+  background: var(--line-strong);
+}
+
+/* Single column inside the topline — three stacked rows, not the standalone
+   grid's two-column split — taking the half the barrier leaves. */
+.today-topline .stats-grid {
+  margin-top: 0;
+  flex: 1 1 0;
+  min-width: 0;
+  grid-template-columns: 1fr;
+  gap: 2px;
+}
+
+.today-hero {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  margin-top: 8px;
+}
+
+.today-hero-label {
+  font-size: 11px;
+  color: var(--ink-muted);
+}
+
+/* One size up from the card title, tabular so a re-read doesn't reflow. */
+.today-hero-value {
+  font-size: 26px;
+  font-weight: 600;
+  line-height: 1.15;
+  letter-spacing: -0.02em;
+  color: var(--ink);
+  font-variant-numeric: tabular-nums;
+}
+
+.today-hero-value.is-empty {
+  color: var(--ink-faint);
+}
+
+/* Same fresh-flash contract as the stat values. */
+.today-hero-value.is-fresh {
+  animation: wash 900ms var(--ease-out-3);
+}
+
+/* Flex would defeat the hidden attribute, so this gets the codebase's
+   explicit [hidden] override (same precedent as .banner[hidden]). */
+.today-earn {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  margin-top: 10px;
+}
+
+.today-earn[hidden] {
   display: none;
 }
 
-.stat-bar-fill {
+.today-earn-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px;
+  font-size: 11px;
+  color: var(--ink-muted);
+}
+
+.today-earn-value {
+  color: var(--ink);
+  font-variant-numeric: tabular-nums;
+}
+
+.today-earn-value.is-empty {
+  color: var(--ink-faint);
+}
+
+.today-earn-value.is-fresh {
+  animation: wash 900ms var(--ease-out-3);
+}
+
+.earn-bar {
+  height: 6px;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--brand) 14%, transparent);
+  overflow: hidden;
+}
+
+.earn-fill {
   display: block;
   height: 100%;
   width: var(--fill, 0%);
@@ -1689,61 +1797,9 @@ html[data-experimental="on"] #couponBtn {
   transition: width var(--dur-2) var(--ease-out-3);
 }
 
-.stat-bar.is-done .stat-bar-fill {
+/* The cap met: the bar's job is done, so it says so in the ok color. */
+.earn-fill.is-done {
   background: var(--ok);
-}
-
-/* ---------- Today's plan (3.1) ---------- */
-
-/* The routine's own verdict, per step, as a two-end row: the chore on the
-   left, its today-verdict on the right. Done rows fade like the finish
-   page's skip list — the things that went right get the faint ink. */
-#planBlock {
-  margin-top: 10px;
-}
-
-.plan-list {
-  list-style: none;
-  margin: 4px 0 0;
-  padding: 0;
-  display: grid;
-  gap: 3px;
-}
-
-.plan-list li {
-  display: flex;
-  align-items: baseline;
-  justify-content: space-between;
-  gap: 10px;
-  font-size: 11.5px;
-}
-
-.plan-title {
-  color: var(--ink);
-  white-space: nowrap;
-}
-
-.plan-verdict {
-  color: var(--ink-muted);
-  font-variant-numeric: tabular-nums;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-
-.plan-list li.is-done .plan-title {
-  color: var(--ink-muted);
-}
-
-.plan-verdict.is-done {
-  color: var(--ok);
-}
-
-/* The .opts list was built for the Settings view's cards; inside the Redeem
-   card it follows a note, so it gets the breathing room the view's card-head
-   would otherwise provide. */
-.opts-card {
-  margin-top: 8px;
 }
 
 /* The head's Refresh button: .btn's padding is sized for the Run-now grid, so
