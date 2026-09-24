@@ -17,7 +17,7 @@ playwright.config.js
 
 # --- live Bing page captures (contain real account data) ---
 *.html
-!src/*.html
+!src-cupcake/*.html
 *.htm
 
 # --- archives and old snapshots ---
@@ -32,22 +32,23 @@ models.md
 tasks/
 .claude/
 
-# --- the src2 rebuild is extension source too: its tests and ESM marker
-# ship with it (the "tests/"/"package.json" rules above match at any depth,
-# so re-include the whole tree) ---
-!src2/**
-!src3/**
-!src4/**
+# --- the ESM builds (donut / eclair / froyo) are extension source too: their
+# tests and ESM markers ship with them (the "tests/"/"package.json" rules above
+# match at any depth, so re-include the whole tree) ---
+!src-donut/**
+!src-eclair/**
+!src-froyo/**
 
-# --- src5 "the zoomies" is a Vite/TypeScript build. Commit its SOURCE (the
+# --- src-gingerbread is a Vite/TypeScript build. Commit its SOURCE (the
 # broad tests/ package.json *.html rules above would otherwise swallow it),
 # but NOT the two generated trees: node_modules (deps) and dist (the build
 # output). The built, loadable extension is distributed via GitHub Releases
-# (the "the zoomies V<version>.zip" asset), so it never needs to live in the
-# repo — anyone can reproduce it with `npm --prefix src5 ci && run build`. ---
-!src5/**
-src5/node_modules/
-src5/dist/
+# (the "Reward Routine Automator — Gingerbread V<version>.zip" asset), so it
+# never needs to live in the repo — anyone can reproduce it with
+# `npm --prefix src-gingerbread ci && run build`. ---
+!src-gingerbread/**
+src-gingerbread/node_modules/
+src-gingerbread/dist/
 
 # --- deepseek-harness is a separate, unrelated project that happens to sit
 # in this working tree; it must never be committed here ---
