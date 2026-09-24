@@ -11,7 +11,7 @@
   const root = document.documentElement;
   try {
     const theme = localStorage.getItem("meowTheme");
-    // "the purr" defaults to catppuccin (ADR-019) — geist stays selectable.
+    // Eclair defaults to catppuccin (ADR-019) — geist stays selectable.
     root.dataset.theme =
       theme === "geist" || theme === "primer" ? theme : "catppuccin";
 

@@ -19,7 +19,7 @@ import { sleep } from './delays.ts'
 import { setLastTabAction, STEP_LABEL } from './log.ts'
 
 // The capture bookkeeping's id: a startup StepId OR a synthetic one for
-// features outside the routine (src2 used the plain string "coupons" the
+// features outside the routine (src-donut used the plain string "coupons" the
 // same way — the bookkeeping only needs a consistent key, not a real step).
 export type CaptureId = StepId | 'coupons'
 

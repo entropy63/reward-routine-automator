@@ -1,6 +1,6 @@
 // @ts-nocheck
 // The visual-search injections — the page-side halves of the image-search
-// step. VERBATIM page-side port from src4/injections/visual-search.js. Each
+// step. VERBATIM page-side port from src-froyo/injections/visual-search.js. Each
 // function's source is handed to chrome.scripting.executeScript({func}), which
 // serializes it with .toString(), so each must be fully self-contained: no
 // imports, no closures over module state (see ADR-017). @ts-nocheck because

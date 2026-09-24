@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
-  "name": "the meow",
-  "version": "5.1.0",
+  "name": "Reward Routine Automator — Froyo",
+  "version": "5.1.1",
   "description": "Automatically perform Bing searches with realistic typing and dynamic intervals, and open daily sets on the Rewards dashboard.",
   "permissions": [
     "tabs",
@@ -30,7 +30,7 @@
     "128": "icons/icon128.png"
   },
   "action": {
-    "default_title": "the meow",
+    "default_title": "Reward Routine Automator — Froyo",
     "default_popup": "popup.html",
     "default_icon": {
       "16": "icons/icon16.png",

@@ -1,6 +1,6 @@
 // @ts-nocheck
 // The Rewards stats reader — the page-side half of refreshStats. VERBATIM
-// page-side port from src4/injections/stats-read.js. Injected via
+// page-side port from src-froyo/injections/stats-read.js. Injected via
 // chrome.scripting.executeScript({func}), serialized with .toString(), so it
 // must be fully self-contained: no imports, no closures over module state (see
 // ADR-017). @ts-nocheck because it runs against the live page (not the

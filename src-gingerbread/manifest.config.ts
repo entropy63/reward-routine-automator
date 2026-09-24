@@ -1,13 +1,13 @@
 import { defineManifest } from '@crxjs/vite-plugin'
 
 // The fifth build's identity (ADR-021). A new name and a cyan tile set it apart
-// from the blue bolt (src), amber bolt (src2), mauve cat (src3 "the purr") and
-// rose paw (src4 "the meow") so the toolbar can hold all five at once. Same
-// permissions and host list as the meow — this build adds no new capability,
-// only a new UI and a rebuilt engine.
+// from the blue bolt (src-cupcake), amber bolt (src-donut), mauve cat
+// (src-eclair — Eclair) and rose paw (src-froyo — Froyo) so the toolbar can
+// hold all five at once. Same permissions and host list as Froyo — this build
+// adds no new capability, only a new UI and a rebuilt engine.
 export default defineManifest({
   manifest_version: 3,
-  name: 'the zoomies',
+  name: 'Reward Routine Automator — Gingerbread',
   // 6.6.7: the Order history moved directly underneath the Activity log
   // (the log is a plain row-1 panel again — no more full-height column), and
   // the orders sync opens its page in the extension's OWN unfocused window
@@ -64,7 +64,7 @@ export default defineManifest({
   // orderhistory into the dashboard, with each recent order's redemption
   // code). 6.5.0: the prowl (random 15–45-minute background mini-batches of
   // 2–5 searches, on by default, toggleable) + the dashboard's full-width
-  // rework (no header bar, HTML chart labels). 6.4.0: src2 parity (redeem
+  // rework (no header bar, HTML chart labels). 6.4.0: src-donut parity (redeem
   // watch + redeem button, coupons, stock-news banners, layout editor,
   // drag-reorder settings) + the full-screen dashboard. 6.6.8: the orders
   // sync FIXED (the injection's module-scope helpers died under
@@ -322,7 +322,7 @@ export default defineManifest({
   // eight tracks ("you can increase the width and height of the grid if
   // needed"), and a Default layout button beside Edit layout restores the
   // shipped board (the stored key is dropped, not overwritten).
-  version: '6.9.4',
+  version: '6.9.5',
   description:
     'Automatically perform Bing searches with realistic typing and dynamic intervals, and open daily sets on the Rewards dashboard.',
   // "downloads" is the one permission the fifth build adds (6.3.2): the
@@ -357,7 +357,7 @@ export default defineManifest({
     type: 'module',
   },
   action: {
-    default_title: 'the zoomies',
+    default_title: 'Reward Routine Automator — Gingerbread',
     default_popup: 'index.html',
   },
   icons: {

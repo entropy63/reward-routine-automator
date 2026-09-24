@@ -11,7 +11,7 @@ import { useCountUp } from '../lib/useCountUp.ts'
 import { formatNumber } from '../lib/format.ts'
 
 // Overwatch coins price at 10 points per coin (user-confirmed 2026-09-03,
-// carried over from src2): "500 coins" costs 5,000 points. The button's label
+// carried over from src-donut): "500 coins" costs 5,000 points. The button's label
 // is this verdict.
 function coinPricePts(label: string): number | null {
   const m = /^([\d.,]+)\s+coins?$/i.exec(String(label || '').trim())
@@ -67,7 +67,7 @@ function redeemVerdict(
 
 // The Redeem view: the coin-amount picker from the watch's last read (sold-out
 // amounts disabled so the choice stays honest), the affordability verdict as
-// the button's label (src2's logic — "Redeem" when the balance covers the
+// the button's label (src-donut's logic — "Redeem" when the balance covers the
 // amount at 10 pts/coin, "View page" otherwise), and a Refresh that fires both
 // reads in one burst. The REDEEM_OVERWATCH message carries the detail URL and
 // the chosen label; the background prefers the variant's own sku href when the
@@ -88,7 +88,7 @@ export function Redeem({
   const variantUrl = (lastRedeem && lastRedeem.variantUrl) || ''
 
   // The selection survives re-reads while the amount is still there — the same
-  // keep-or-fallback rule src2's picker used.
+  // keep-or-fallback rule src-donut's picker used.
   const [chosenLabel, setChosenLabel] = useState('')
   const stillThere = variants.some((v) => v.label === chosenLabel && v.available !== false)
   const fallback = variants.find((v) => v.available !== false)?.label || ''
@@ -151,7 +151,7 @@ export function Redeem({
               setNote('Reading stats and the redeem catalog…')
               // One burst refreshes both halves of the card: the stats read
               // (the balance the verdict needs) and the redeem watch (the
-              // amounts and the detail URL), same as src2's Refresh.
+              // amounts and the detail URL), same as src-donut's Refresh.
               send({ type: 'REFRESH_STATS' }).then(() => {
                 send({ type: 'REFRESH_REDEEM' }).then(() => setNote(''))
               })

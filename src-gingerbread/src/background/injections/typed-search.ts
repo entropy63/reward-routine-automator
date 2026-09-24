@@ -1,6 +1,6 @@
 // @ts-nocheck
 // Typing search queries inside the Bing page. VERBATIM page-side port from
-// src4/injections/typed-search.js — this function's source is handed to
+// src-froyo/injections/typed-search.js — this function's source is handed to
 // chrome.scripting.executeScript({ func }), which serializes it with
 // .toString() and runs it in the page, so it must stay entirely
 // self-contained: no imports, no closure references, nothing outside its own

@@ -1,5 +1,5 @@
-// The in-memory chrome stub the src2 tests run against. Installed onto
-// globalThis before the module under test is called — every src2 module
+// The in-memory chrome stub the src-donut tests run against. Installed onto
+// globalThis before the module under test is called — every src-donut module
 // touches chrome only inside functions, never at module evaluation, so a
 // runtime stub is all it takes. (This is the whole reason the src1
 // brace-matched extractFunction harnesses could die.)

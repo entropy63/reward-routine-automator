@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
-  "name": "the pounce",
-  "version": "3.2.0",
+  "name": "Reward Routine Automator — Donut",
+  "version": "3.2.1",
   "description": "Automatically perform Bing searches with realistic typing and dynamic intervals, and open daily sets on the Rewards dashboard.",
   "permissions": [
     "tabs",
@@ -29,7 +29,7 @@
     "128": "icons/icon128.png"
   },
   "action": {
-    "default_title": "the pounce",
+    "default_title": "Reward Routine Automator — Donut",
     "default_popup": "popup.html",
     "default_icon": {
       "16": "icons/icon16.png",

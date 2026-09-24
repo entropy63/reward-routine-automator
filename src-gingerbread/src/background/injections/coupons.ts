@@ -1,6 +1,6 @@
 // @ts-nocheck
 // The coupon injections — the page-side halves of the coupon count read and
-// the Coupons button. Ported verbatim from src2/injections/coupons.js
+// the Coupons button. Ported verbatim from src-donut/injections/coupons.js
 // (2026-09-08): the trigger/apply/applied regexes and the panel re-render
 // scan carry over unchanged (see ADR-017).
 //

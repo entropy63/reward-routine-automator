@@ -59,7 +59,7 @@ export const GearIcon = (p: IconProps) => (
 )
 
 // The extension's own mark — the same cyan comet tile the toolbar icon shows
-// (scripts/make-icons-src5.js, kept in sync by hand): an outlined rounded tile
+// (scripts/make-icons-gingerbread.js, kept in sync by hand): an outlined rounded tile
 // with a comet head dashing right and three speed lines. Unlike the icons
 // above it paints its own colors (it's a brand, not a currentColor glyph), so
 // the topbar shows the extension itself beside the title instead of a blank

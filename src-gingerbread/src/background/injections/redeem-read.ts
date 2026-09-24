@@ -1,7 +1,7 @@
 // @ts-nocheck
 // The redeem-watch injections — the page-side halves of the three-phase
 // catalog read and the popup's Redeem button. Ported verbatim from
-// src2/injections/redeem-read.js (2026-09-08): every selector, regex
+// src-donut/injections/redeem-read.js (2026-09-08): every selector, regex
 // (English + Arabic), RSC-payload stock reader, poll idiom, and the ADR-010
 // dump contract carries over unchanged, because these are hand-tuned against
 // the live /redeem markup — rewriting them is pure risk (see ADR-017).

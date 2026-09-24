@@ -90,7 +90,7 @@ export interface LastQuery {
 
 // ---------- the redeem watch's documents ----------
 //
-// Shapes ported from src2's redeem watch (readers/redeem.js), typed once here
+// Shapes ported from src-donut's redeem watch (readers/redeem.js), typed once here
 // so the reader that writes them and the views that render them cannot drift.
 
 // One catalog card from the /redeem search results (readRedeemOptions):
@@ -143,7 +143,7 @@ export interface StockNews {
 
 // One point of the redeem history (redeemHistory): the availability of one
 // coin amount at one read. The dashboard's per-denomination timeline charts
-// these; src2 never kept them (it stored only the last read) — this is the
+// these; src-donut never kept them (it stored only the last read) — this is the
 // one series the fifth build adds for the full-screen dashboard.
 export interface RedeemHistoryEntry {
   at: number

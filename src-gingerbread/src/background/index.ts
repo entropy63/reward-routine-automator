@@ -9,7 +9,7 @@
 //   routine/search.ts    the search batch + verification loop
 //   routine/routine.ts   the startup sequence and its tail
 //   readers/*            the dashboard reads (stats, redeem, coupons, claim)
-//   injections/*         the page-side halves, ported verbatim from src2/src4
+//   injections/*         the page-side halves, ported verbatim from src-donut/src-froyo
 //   images/*             the random-image visual search
 //
 // Bundled by Vite into dist/ as a module service worker; build.target is set
@@ -17,7 +17,7 @@
 // func-injections stay self-contained and serializable.
 //
 // Phase 1 scope: the restock-watcher alarm — and its syncs and messages
-// (SET_RESTOCK_WATCH) — stays deferred (src2 never had it either), so this
+// (SET_RESTOCK_WATCH) — stays deferred (src-donut never had it either), so this
 // entry point carries the search alarm, the prowl alarm (the random
 // mini-batches inside the user's interval window), the scheduled-run alarm
 // (the routine once a day at the user-specified time), the redeem/coupons

@@ -1,7 +1,7 @@
 // @ts-nocheck
 // The Rewards-dashboard injections — the tile clicker behind the daily set /
 // keep earning steps, and the page-side claim routine. VERBATIM page-side port
-// from src4/injections/rewards-tiles.js. Injected via
+// from src-froyo/injections/rewards-tiles.js. Injected via
 // chrome.scripting.executeScript({func}), serialized with .toString(), so each
 // function must be fully self-contained: no imports, no closures over module
 // state (see ADR-017). @ts-nocheck because these run against the live page (not

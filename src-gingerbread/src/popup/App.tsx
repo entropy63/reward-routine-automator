@@ -71,7 +71,7 @@ export function App() {
   const [tab, setTab] = useState<Tab>('today')
   const [settingsOpen, setSettingsOpen] = useState(false)
   // The Developer Option "preview every banner": local state only — the sample
-  // payloads live in the component (src2's testNotificationsBtn was DOM-only
+  // payloads live in the component (src-donut's testNotificationsBtn was DOM-only
   // the same way), so the preview vanishes on the next popup open.
   const [bannerPreview, setBannerPreview] = useState(false)
 
@@ -132,7 +132,7 @@ export function App() {
             // toolbar icon (see icons.tsx), not a blank gradient square.
             <CometMark className="brand-glyph" />
           )}
-          <span className="brand-title">{settingsOpen ? 'Settings' : 'the zoomies'}</span>
+          <span className="brand-title">{settingsOpen ? 'Settings' : 'Reward Routine Automator — Gingerbread'}</span>
         </div>
         <div className="topbar-actions">
           <span className={`status-pill${status.live ? ' status-pill--live' : ''}`} title={status.label}>
@@ -222,7 +222,7 @@ export function App() {
       <main className="stage">
         {/* The banners sit above the stage inside the fixed frame (compact
          * single-line styling keeps the tabbar visible): the Bing-app warning,
-         * a restock, a newly sold-out amount. src2 parity — not dismissible. */}
+         * a restock, a newly sold-out amount. src-donut parity — not dismissible. */}
         {!settingsOpen && <Banners stats={stats} preview={bannerPreview} />}
         <AnimatePresence mode="wait">
           {settingsOpen ? (

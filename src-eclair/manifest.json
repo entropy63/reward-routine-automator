@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
-  "name": "the purr",
-  "version": "4.1.0",
+  "name": "Reward Routine Automator — Eclair",
+  "version": "4.1.1",
   "description": "Automatically perform Bing searches with realistic typing and dynamic intervals, and open daily sets on the Rewards dashboard.",
   "permissions": [
     "tabs",
@@ -29,7 +29,7 @@
     "128": "icons/icon128.png"
   },
   "action": {
-    "default_title": "the purr",
+    "default_title": "Reward Routine Automator — Eclair",
     "default_popup": "popup.html",
     "default_icon": {
       "16": "icons/icon16.png",

@@ -1,7 +1,7 @@
 // The popup's Coupons button (Settings → Experimental features). Opens the
 // Rewards dashboard in the foreground, clicks the "Coupon (N)" trigger and
 // then presses every "Apply coupon" in the panel that opens. Ported from
-// src2's readers/coupons.js (2026-09-08). Experimental because no live
+// src-donut's readers/coupons.js (2026-09-08). Experimental because no live
 // coupon has been run through it yet: the panel's markup is in no capture
 // (it renders only after the trigger is clicked), so the page-side claimer
 // follows the dump contract (ADR-010) — anything it doesn't recognize lands

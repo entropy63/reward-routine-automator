@@ -5,7 +5,7 @@
 // Each feature records the tabs it opens so it can close them again when it
 // finishes. Daily set is the reason this can't just remember one id: clicking
 // a tile opens further tabs, so anything created while a feature is
-// "capturing" counts as belonging to it. In src2 this lives inside the
+// "capturing" counts as belonging to it. In src-donut this lives inside the
 // run-state document (captures.capturing / captures.opened) rather than two
 // storage keys of its own — the serialization that made the v1 writes safe
 // is updateRunState's promise chain now, and a stop clears the bookkeeping

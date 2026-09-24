@@ -55,6 +55,13 @@
   letter-spacing: -0.01em;
   font-size: 15px;
   white-space: nowrap;
+  /* The build's full name ("Reward Routine Automator — Gingerbread") is far
+   * wider than the 440px popup's topbar has room for beside the status pill
+   * and the action buttons, so it degrades to an ellipsis instead of
+   * overflowing. min-width:0 is what lets a nowrap flex item shrink at all. */
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 .topbar-actions {
   display: flex;
@@ -465,7 +472,7 @@
 
 /* ---------- drag-reorder lists (Settings) ---------- */
 /* framer-motion Reorder rows: the handle is the grab affordance, but the whole
- * row drags (the handle is visual, matching src2's .step-handle look). The
+ * row drags (the handle is visual, matching src-donut's .step-handle look). The
  * rows carry data-no-escape so a drag can't be interrupted by the troll. */
 .reorder-list {
   list-style: none;
@@ -511,7 +518,7 @@
   border: 1px solid color-mix(in srgb, var(--accent) 30%, transparent);
 }
 
-/* The stock-news + Bing-app banners (src2 parity, 2026-09-08). NOT
+/* The stock-news + Bing-app banners (src-donut parity, 2026-09-08). NOT
  * dismissible — a record clears only when the page's state flips back, so
  * there is no close glyph on these. */
 .banner--danger {

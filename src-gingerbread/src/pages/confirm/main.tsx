@@ -27,7 +27,7 @@ function ConfirmPage({ background, animate }: { background: BackgroundStyle; ani
         <div className="page-glyph" aria-hidden="true" />
         <h1 className="page-title">Start the daily routine?</h1>
         <p className="page-sub">
-          the zoomies is about to run your searches and daily set. It starts on its own in a few
+          Reward Routine Automator is about to run your searches and daily set. It starts on its own in a few
           seconds — choose “Not now” to skip this run.
         </p>
         <div className="page-actions">

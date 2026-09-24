@@ -8,7 +8,7 @@ import type { Message, MessageResponse } from '../../shared/messages.ts'
 // presses every "Apply coupon" the panel shows. Grayed exactly when the last
 // read saw every coupon applied (available === 0); no record yet leaves it
 // pressable, because the run reports what it found either way. Held disabled
-// while a run is in flight — it comes back on the next real read (src2's
+// while a run is in flight — it comes back on the next real read (src-donut's
 // reasoning). Shared by the popup's Run view and the dashboard's controls tile.
 export function CouponsButton({ send }: { send: (message: Message) => Promise<MessageResponse> }) {
   const coupons = useLastCoupons()

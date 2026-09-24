@@ -11,7 +11,7 @@
   try {
     // Same pre-paint logic as the height: the palette has to be on the root
     // before the first paint or the whole popup flashes the default theme.
-    // "the purr" defaults to catppuccin (ADR-019) — geist stays selectable.
+    // Eclair defaults to catppuccin (ADR-019) — geist stays selectable.
     const theme = localStorage.getItem("meowTheme");
     root.dataset.theme =
       theme === "geist" || theme === "primer" ? theme : "catppuccin";

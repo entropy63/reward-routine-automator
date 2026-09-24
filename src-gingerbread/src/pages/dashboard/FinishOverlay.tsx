@@ -104,7 +104,7 @@ export function FinishOverlay({
         <div className="finish-glyph" aria-hidden="true" />
         <h1 className="finish-title">Daily routine complete</h1>
         <p className="finish-sub">
-          the zoomies finished its run.{' '}
+          Reward Routine Automator finished its run.{' '}
           {allDone
             ? 'Every streak it can reach is done.'
             : 'A couple of streaks need you to finish them by hand.'}

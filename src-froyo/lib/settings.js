@@ -90,7 +90,7 @@ export const DEFAULT_SETTINGS = {
   // Everything below is read by popup.js only; the worker stores it and
   // never interprets it.
   animationsEnabled: true,         // Popup motion
-  theme: "catppuccin",             // Popup palette ("the purr" defaults to
+  theme: "catppuccin",             // Popup palette (Eclair defaults to
                                    // catppuccin; geist and primer remain)
   accentColor: "",                 // Popup-only (ADR-020): an explicit brand
                                    // color ("#f472b6") overriding the theme's

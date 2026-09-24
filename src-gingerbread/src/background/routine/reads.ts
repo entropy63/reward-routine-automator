@@ -5,7 +5,7 @@
 // reader moves.
 //
 // The redeem watch joins the stats read as the routine step's second half
-// (src2's runStartupReads did the same): the numbers and the coin catalog are
+// (src-donut's runStartupReads did the same): the numbers and the coin catalog are
 // read in one opening burst, and both refuse to double up through the shared
 // READ_RUN_GUARDS if the popup's Refresh fired them moments earlier.
 

@@ -2,7 +2,7 @@
 // offers into lastRedeem: opens /redeem, drives the page's own search box
 // with REDEEM_QUERY, then reads the matching catalog cards' title, price and
 // stock state. On demand from the popup's Refresh button, and as the second
-// half of the routine's stats step. Ported from src2's readers/redeem.js
+// half of the routine's stats step. Ported from src-donut's readers/redeem.js
 // (2026-09-08) — the three phases, guards, stop checkpoints, and own-tab
 // close tail carry over; the ONE addition is the redeemHistory series the
 // full-screen dashboard charts (one entry per variant per read).
@@ -244,7 +244,7 @@ export async function checkRedeemAvailability(): Promise<void> {
           const record = await getLocal<RedeemRead>(KEYS.lastRedeem)
           if (record) {
             // Stock-change news: the pure diff in pure/redeem-news.ts (extracted
-            // from src2's inline logic so it is unit-tested).
+            // from src-donut's inline logic so it is unit-tested).
             const diff = diffStock(
               record.variants || [],
               variants,
@@ -269,7 +269,7 @@ export async function checkRedeemAvailability(): Promise<void> {
             }
 
             // The dashboard's series: one entry per variant per read (the one
-            // capability src2 never had). Appended then trimmed oldest-first.
+            // capability src-donut never had). Appended then trimmed oldest-first.
             await appendRedeemHistory(variants)
 
             await setLocal(KEYS.lastRedeem, { ...record, variants, variantUrl: detailUrl })

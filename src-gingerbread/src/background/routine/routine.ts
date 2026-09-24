@@ -84,7 +84,7 @@ export function normalizeStartupOrder(order: StepId[] | null | undefined): StepI
 }
 
 // The routine's opening reads, as one step: the Rewards stats (dashboard +
-// Earn pages, merged), then the redeem watch — src2's second half. Both are
+// Earn pages, merged), then the redeem watch — src-donut's second half. Both are
 // convenience reads that never throw, so the watch cannot fail the step the
 // stats read just passed. As a step it can be turned off (statsStartupEnabled)
 // and dragged around like any other; the default order keeps it first so the

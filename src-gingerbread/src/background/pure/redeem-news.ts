@@ -1,4 +1,4 @@
-// The redeem watch's stock-change logic, extracted from src2's inline
+// The redeem watch's stock-change logic, extracted from src-donut's inline
 // diffing (readers/redeem.js, 2026-09-03) so it can be unit-tested and so the
 // reader stays orchestration-only. Pure: storage in, storage shapes out.
 

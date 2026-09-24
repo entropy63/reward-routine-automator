@@ -2,7 +2,7 @@ import { AnimatePresence, motion } from 'framer-motion'
 import type { Stats, StockNews } from '../../shared/storage.ts'
 import { useRestockNews, useSoldOutNews } from '../hooks/useRedeem.ts'
 
-// The banners above the stage (src2 parity, 2026-09-03 wording kept): the
+// The banners above the stage (src-donut parity, 2026-09-03 wording kept): the
 // Bing-app warning (danger — the one step the routine genuinely cannot do,
 // it only counts from the real phone app), a restock (green), and a newly
 // sold-out Overwatch amount (orange). NOT dismissible: the banners show while
@@ -10,7 +10,7 @@ import { useRestockNews, useSoldOutNews } from '../hooks/useRedeem.ts'
 // amount flips back — there is no close glyph on any of these.
 //
 // The preview prop is the Developer Option "preview every banner" button's
-// sample payloads (DOM-only in src2, local state here): nothing touches
+// sample payloads (DOM-only in src-donut, local state here): nothing touches
 // storage, so the preview vanishes on the next popup open or the next real
 // record landing.
 
@@ -33,7 +33,7 @@ function BingAppBanner({ stats }: { stats: Stats | null }) {
           animate={{ opacity: 1, height: 'auto', marginBottom: 11 }}
           exit={{ opacity: 0, height: 0, marginBottom: 0 }}
         >
-          {/* Short by request (2026-09-03, kept from src2): the banner only
+          {/* Short by request (2026-09-03, kept from src-donut): the banner only
            * says the check-in wasn't done; the why rides along as hover text. */}
           Bing app check-in not done yet today.
         </motion.div>

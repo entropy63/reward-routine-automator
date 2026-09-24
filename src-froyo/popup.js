@@ -156,7 +156,7 @@ document.addEventListener("DOMContentLoaded", async () => {
   const lastImageSearchEl = document.getElementById("lastImageSearch");
   const lastTabActionEl = document.getElementById("lastTabAction");
 
-  // The Today card (the src2 Stats card, redesigned — ADR-019). Keys mirror
+  // The Today card (the src-donut Stats card, redesigned — ADR-019). Keys mirror
   // the shape background.js stores in lastStats,
   // with the activities flattened into the same lookup. The Overwatch amounts
   // no longer render here (user request 2026-09-03) — the Redeem card's
@@ -275,7 +275,7 @@ document.addEventListener("DOMContentLoaded", async () => {
 
   // settings live in sync; the run state/lastQuery churn too fast for the
   // sync quota. The run state is ONE document (runState — see
-  // src2/lib/run-state.js): batch != null means the search batch is running
+  // src-donut/lib/run-state.js): batch != null means the search batch is running
   // with its remaining count, activity != null means a manual run with its
   // label. The old "status" key's {running, label, remaining} shape is what
   // updateStatus consumes, so the small adapter below translates at each
@@ -374,7 +374,7 @@ document.addEventListener("DOMContentLoaded", async () => {
   // Run grid before the first paint or not at all.
   applyExperimental(experimentalToggle.checked);
   applySectionVisibility();
-  // "the meow" defaults to catppuccin; geist and primer remain.
+  // Froyo defaults to catppuccin; geist and primer remain.
   const theme = ["geist", "primer", "catppuccin"].includes(
     effectiveSettings.theme
   )
@@ -1496,7 +1496,7 @@ document.addEventListener("DOMContentLoaded", async () => {
     if (live && changed) replay(el, "is-fresh");
   }
 
-  // The runState document (src2/lib/run-state.js) squeezed into the shape
+  // The runState document (src-donut/lib/run-state.js) squeezed into the shape
   // updateStatus has always consumed: {running, label, remaining}. The batch
   // owns the countdown; a manual activity owns the label; anything else —
   // including a stop's one nulling write — reads as idle.
