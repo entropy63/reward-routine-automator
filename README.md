@@ -16,23 +16,24 @@ It is a single-user tool: one machine, one signed-in Bing Rewards account. No
 server, no analytics, no store listing, and nothing ever leaves the hosts the
 routine touches.
 
-The repository holds five builds of the same extension. They share the routine
-and differ in module style and UI:
+The repository holds five builds of the same extension. They share the routine,
+and each carries its own release codename — Android-dessert style — so the
+folder, the name and the version line up:
 
-| # | Name | Folder | Language |
-|---|---|---|---|
-| 1 | Reward Routine Automator | `src/` | plain JS, classic service worker |
-| 2 | the pounce | `src2/` | plain JS, ESM |
-| 3 | the purr | `src3/` | plain JS, ESM |
-| 4 | the meow | `src4/` | plain JS, ESM |
-| 5 | the zoomies | `src5/` | React + TypeScript + Vite |
+| # | Name | Version | Folder | Language |
+|---|---|---|---|---|
+| 1 | Reward Routine Automator — Cupcake | 2.1.18 | `src-cupcake/` | plain JS, classic service worker |
+| 2 | Reward Routine Automator — Donut | 3.2.1 | `src-donut/` | plain JS, ESM |
+| 3 | Reward Routine Automator — Eclair | 4.1.1 | `src-eclair/` | plain JS, ESM |
+| 4 | Reward Routine Automator — Froyo | 5.1.1 | `src-froyo/` | plain JS, ESM |
+| 5 | Reward Routine Automator — Gingerbread | 6.9.5 | `src-gingerbread/` | React + TypeScript + Vite |
 
 ## Features
 
 The routine is in all five builds; the later builds add to it rather than
-replace it. Where a feature arrived in a later build it is marked, so
-**(builds 3–5)** means that build and the ones after it, and **(build 5)**
-means "the zoomies" alone.
+replace it. Where a feature arrived in a later build it is marked with that
+build's codename, so **(Eclair and later)** means Eclair and every build after
+it, and **(Gingerbread)** means Gingerbread alone.
 
 ### The routine
 
@@ -52,29 +53,29 @@ means "the zoomies" alone.
 - **Image search** — one random image (picsum → thecatapi → a locally drawn
   canvas fallback) fed through Bing's visual-search dialog.
 - **Finish page** — a summary of what's left to do yourself (streaks in red)
-  and what was skipped as already done (dimmed). Builds 1–4 open it as its own
-  page; build 5 blurs it over the dashboard.
+  and what was skipped as already done (dimmed). Cupcake–Froyo open it as its
+  own page; Gingerbread blurs it over the dashboard.
 - **Skip-when-done** — the routine never repeats work today's read says is
   already complete: search points at the cap, nothing pending to claim, daily
   set 3/3, visual search 1/1. Each skipped step is named in the activity log,
   and a manual button press always runs, whatever the numbers say.
 - **On demand** — run the whole routine, or a single step, from the popup at
   any time, with a live activity log and a running status line.
-- **Dry-run pre-flight** — *(build 3)*. *Run the routine* shows what the run
+- **Dry-run pre-flight** — *(Eclair)*. *Run the routine* shows what the run
   would actually do before it does it: every step listed as *will open* (with
   the tabs it will open, and how many searches automatic mode needs) or *will
   skip*, with the verdict's own wording. The startup confirm dialog shows the
   same list, and Cancel opens nothing. It is built on the routine's own plan
   code, so the preview cannot disagree with the run.
-- **The prowl** — *(build 5)*. Background search rounds of 2–5 searches on a
+- **The prowl** — *(Gingerbread)*. Background search rounds of 2–5 searches on a
   timer of its own, inside a wait window you set (15–45 minutes by default), so
   points keep arriving between routines. On by default; one switch turns it
   off, and the window is yours to widen or narrow.
-- **Scheduled daily run** — *(builds 3–5)*. Fires the routine at a time you
+- **Scheduled daily run** — *(Eclair and later)*. Fires the routine at a time you
   pick, once a day. The wall clock is the trigger, not an alarm: a browser that
   was closed or asleep when the moment passed still runs the owed round on its
   next wake, so the day is never silently lost.
-- **Evening nudge** — *(build 4)*. A notification at a time you pick naming what
+- **Evening nudge** — *(Froyo)*. A notification at a time you pick naming what
   is still open today, with **Run it** and **Later** buttons on the banner
   itself — Run it starts the routine on the spot. It stays quiet on a day with
   nothing left, and it rides the same wall-clock machinery as the scheduled run,
@@ -94,26 +95,26 @@ means "the zoomies" alone.
 
 ### Points and progress
 
-- **Today** — *(builds 3–5)*. Available points with a count-up, how fresh the
+- **Today** — *(Eclair and later)*. Available points with a count-up, how fresh the
   number is, ready-to-claim, the daily streak and the stamp bonus, search
   progress, today's activity streaks, and an "if the routine ran now" plan.
-- **Streak guard** — *(build 3)*. A "before the day ends" block naming each
+- **Streak guard** — *(Eclair)*. A "before the day ends" block naming each
   unfinished streak and the hours left until midnight, shown only when a streak
   is genuinely at risk. It asks the routine's own done-checks, so it warns about
   exactly the work the routine would still do.
-- **Last 7 days** — *(builds 4–5)*. A sparkline of recent points, with the
+- **Last 7 days** — *(Froyo and later)*. A sparkline of recent points, with the
   points goal beside it and the recent points-per-day trend.
-- **Points goal** — *(builds 4–5)*. Set a target and the Today view tracks it:
+- **Points goal** — *(Froyo and later)*. Set a target and the Today view tracks it:
   the bar, the days left, and the trend you are on.
-- **Goal alert** — *(build 4)*. A notification when the goal comes within the
+- **Goal alert** — *(Froyo)*. A notification when the goal comes within the
   lead time you set, and another when it lands, with the real numbers. It fires
   on the crossing, not on every read, and switching it off takes the banner
   down with it.
-- **Points history** — *(build 5)*. A chart of the balance over time, on the
+- **Points history** — *(Gingerbread)*. A chart of the balance over time, on the
   dashboard.
-- **Membership medal** — *(build 5)*. Your Rewards tier, shown beside the
+- **Membership medal** — *(Gingerbread)*. Your Rewards tier, shown beside the
   balance.
-- **Streaks** — *(build 5)*. Today's streaks as their own dashboard tile.
+- **Streaks** — *(Gingerbread)*. Today's streaks as their own dashboard tile.
 
 ### Redeem, coupons and orders
 
@@ -123,13 +124,13 @@ means "the zoomies" alone.
 - **Overwatch coins** — a coin-amount picker built from the last read, priced
   in points (10 points per coin), with sold-out amounts disabled.
 - **Coupons** — claims the free coupons on offer.
-- **Order history** — *(build 5)*. Every order with its date and its code, a
+- **Order history** — *(Gingerbread)*. Every order with its date and its code, a
   Copy button per code, an incremental sync that only re-reads new orders, and
   a rescan that re-reads every one.
-- **Stock news** — *(build 5)*. A note whenever a coin amount flips between
+- **Stock news** — *(Gingerbread)*. A note whenever a coin amount flips between
   reads — restocked, or sold out.
 
-### The dashboard — *(build 5)*
+### The dashboard — *(Gingerbread)*
 
 A second surface that keeps the day on screen: balance, points history,
 streaks, run controls, the next routine, Overwatch coins, stock news, order
@@ -171,9 +172,9 @@ history and the activity log.
   glows, particles that flee the pointer and a node web that links to it, down
   to flat.
 - **Glass tiles** — a blur slider for the cards over the backdrop.
-- **Low power mode** — *(build 5)*. One switch stills everything that moves
+- **Low power mode** — *(Gingerbread)*. One switch stills everything that moves
   and freezes the backdrops.
-- **The troll** — *(build 5)*. Controls dodge the cursor as you reach for
+- **The troll** — *(Gingerbread)*. Controls dodge the cursor as you reach for
   them. Off by default; turning it on is a deliberate choice.
 
 ### The popup
@@ -192,7 +193,7 @@ history and the activity log.
 
 1. Download a `.zip` from the
    [Releases](https://github.com/entropy63/reward-routine-automator/releases)
-   page and unzip it. Each release carries both builds.
+   page and unzip it — each carries one build, named for its codename.
 2. Open `chrome://extensions` and turn on **Developer mode**.
 3. Click **Load unpacked** and select the unzipped folder — the one that
    contains `manifest.json` at its top level.
@@ -200,16 +201,16 @@ history and the activity log.
 ### From source
 
 Builds 1–4 are plain JavaScript and CSS with **no build step** — point **Load
-unpacked** straight at `src/`, `src2/`, `src3/` or `src4/`.
+unpacked** straight at `src-cupcake/`, `src-donut/`, `src-eclair/` or `src-froyo/`.
 
-Build 5 ("the zoomies") is React + TypeScript + Vite, so build it first:
+Build 5 (Gingerbread) is React + TypeScript + Vite, so build it first:
 
 ```sh
-npm --prefix src5 ci
-npm --prefix src5 run build
+npm --prefix src-gingerbread ci
+npm --prefix src-gingerbread run build
 ```
 
-then load `src5/dist`.
+then load `src-gingerbread/dist`.
 
 ### Either way
 
