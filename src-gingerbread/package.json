@@ -1,7 +1,7 @@
 {
   "name": "reward-routine-automator-gingerbread",
   "private": true,
-  "version": "6.9.5",
+  "version": "6.9.6",
   "description": "The fifth build — React + TypeScript rebuild of the Bing Rewards routine automator, with a from-scratch engine. Built with Vite + CRXJS; load src-gingerbread/dist unpacked.",
   "type": "module",
   "scripts": {

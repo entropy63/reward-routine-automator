@@ -132,7 +132,11 @@ export function App() {
             // toolbar icon (see icons.tsx), not a blank gradient square.
             <CometMark className="brand-glyph" />
           )}
-          <span className="brand-title">{settingsOpen ? 'Settings' : 'Reward Routine Automator — Gingerbread'}</span>
+          {/* The bar shows just the codename (user request, 2026-09-26: "the
+           * name that shows in the extension popup should be the code name") —
+           * the full "Reward Routine Automator — Gingerbread" still names the
+           * build everywhere it identifies itself (manifest, tab title, zip). */}
+          <span className="brand-title">{settingsOpen ? 'Settings' : 'Gingerbread'}</span>
         </div>
         <div className="topbar-actions">
           <span className={`status-pill${status.live ? ' status-pill--live' : ''}`} title={status.label}>

@@ -11,7 +11,7 @@ import type { Settings, StepId } from '../../shared/settings.ts'
 import { readRunState, updateRunState, currentStopEpoch, consumeRoutine } from '../core/run-state.ts'
 import { holdKeepAlive, releaseKeepAlive } from '../core/keepalive.ts'
 import { sleep } from '../core/delays.ts'
-import { closeTabs } from '../core/tabs.ts'
+import { closeTabs, closeOtherDashboardTabs } from '../core/tabs.ts'
 import { setLastTabAction, setLastRewards, reportImageSearch } from '../core/log.ts'
 import { KEYS, getLocal, setLocal } from '../../shared/storage.ts'
 import type { Activities, SkippedStep, Stats } from '../../shared/storage.ts'
@@ -548,10 +548,14 @@ export async function endRoutine(): Promise<void> {
     const params = new URLSearchParams()
     if (summary) params.set('q', summary)
     if (skippedQuery) params.set('s', skippedQuery)
-    await chrome.tabs.create({
+    const finishTab = await chrome.tabs.create({
       url: `${FINISH_URL}${params.toString() ? `?${params.toString()}` : ''}`,
       active: true,
     })
+    // The finish screen is now the current dashboard; any dashboards left open
+    // by earlier runs are stale, so close them (user request, 2026-09-26),
+    // sparing the one just opened. Best-effort — never fails the finish.
+    await closeOtherDashboardTabs(finishTab.id ?? null)
   } catch (e) {
     // The summary is a nicety, never a failure of the routine itself.
     console.warn('Routine: could not open the finish screen:', e)

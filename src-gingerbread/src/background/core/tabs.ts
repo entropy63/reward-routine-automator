@@ -265,6 +265,37 @@ function isDashboardTab(tab: chrome.tabs.Tab): boolean {
   return urls.some((url) => url.includes(DASHBOARD_URL))
 }
 
+// When a routine finishes it opens a fresh dashboard for the finish overlay to
+// ride on. Any dashboards left open by EARLIER runs are now stale — the same
+// board, an older summary — so the finish sweep closes them, leaving only the
+// one the user is now looking at (user request, 2026-09-26: the finish screen
+// should also close the previous runs' dashboard pages). Queried across every
+// window, since a prior run's dashboard may sit in another window; the just-
+// opened tab is spared by id. Best-effort: a routine never fails because a
+// stale tab could not be enumerated or closed.
+export async function closeOtherDashboardTabs(keepTabId: number | null): Promise<number> {
+  let tabs: chrome.tabs.Tab[]
+  try {
+    tabs = await chrome.tabs.query({})
+  } catch (e) {
+    console.warn('Finish: could not enumerate dashboard tabs to close:', e)
+    return 0
+  }
+  const doomed = tabs
+    .filter((tab) => tab.id !== keepTabId)
+    .filter(isDashboardTab)
+    .map((tab) => tab.id)
+    .filter((id): id is number => typeof id === 'number')
+  if (!doomed.length) return 0
+  try {
+    await chrome.tabs.remove(doomed)
+  } catch (e) {
+    console.warn('Finish: could not close prior dashboard tabs:', e)
+    return 0
+  }
+  return doomed.length
+}
+
 // Opens a fresh tab first, then closes everything else in that window, so the
 // window never blinks out of existence.
 export async function clearAllTabs(windowId?: number | null): Promise<ClearResult> {

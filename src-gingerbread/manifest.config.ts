@@ -322,7 +322,7 @@ export default defineManifest({
   // eight tracks ("you can increase the width and height of the grid if
   // needed"), and a Default layout button beside Edit layout restores the
   // shipped board (the stored key is dropped, not overwritten).
-  version: '6.9.5',
+  version: '6.9.6',
   description:
     'Automatically perform Bing searches with realistic typing and dynamic intervals, and open daily sets on the Rewards dashboard.',
   // "downloads" is the one permission the fifth build adds (6.3.2): the
