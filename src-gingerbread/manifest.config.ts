@@ -322,7 +322,15 @@ export default defineManifest({
   // eight tracks ("you can increase the width and height of the grid if
   // needed"), and a Default layout button beside Edit layout restores the
   // shipped board (the stored key is dropped, not overwritten).
-  version: '6.9.6',
+  // 6.9.7: the finish clears Bing, and the first search skips the box. The
+  // routine's end now sweeps every bing.com / rewards.microsoft.com tab it can
+  // find instead of only the tabs it captured — the boards and pinned tabs
+  // survive — and the first search of a regular batch loads Bing's results URL
+  // directly rather than typing into the search box. That is the closest an
+  // extension can come to an omnibox search: Chrome exposes no API for the
+  // omnibox and none for the default search engine, so no browser setting is
+  // read or changed (ADR-023).
+  version: '6.9.7',
   description:
     'Automatically perform Bing searches with realistic typing and dynamic intervals, and open daily sets on the Rewards dashboard.',
   // "downloads" is the one permission the fifth build adds (6.3.2): the

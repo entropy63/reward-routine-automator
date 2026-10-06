@@ -26,7 +26,7 @@ folder, the name and the version line up:
 | 2 | Reward Routine Automator — Donut | 3.2.1 | `src-donut/` | plain JS, ESM |
 | 3 | Reward Routine Automator — Eclair | 4.1.1 | `src-eclair/` | plain JS, ESM |
 | 4 | Reward Routine Automator — Froyo | 5.1.1 | `src-froyo/` | plain JS, ESM |
-| 5 | Reward Routine Automator — Gingerbread | 6.9.5 | `src-gingerbread/` | React + TypeScript + Vite |
+| 5 | Reward Routine Automator — Gingerbread | 6.9.7 | `src-gingerbread/` | React + TypeScript + Vite |
 
 ## Features
 
@@ -49,12 +49,19 @@ it, and **(Gingerbread)** means Gingerbread alone.
   number you set. **Automatic** checks how many points the day still needs,
   runs only the searches still needed (3 points each, never past the cap),
   re-checks after the batch, and runs more while the points keep moving — up to
-  three batches.
+  three batches. In Gingerbread the **first search of a batch loads Bing's
+  results URL directly** instead of typing into the search box — the closest an
+  extension can come to an address-bar search, since Chrome exposes no API for
+  the omnibox or for the browser's default search engine. Every search after
+  the first types as usual.
 - **Image search** — one random image (picsum → thecatapi → a locally drawn
   canvas fallback) fed through Bing's visual-search dialog.
 - **Finish page** — a summary of what's left to do yourself (streaks in red)
   and what was skipped as already done (dimmed). Cupcake–Froyo open it as its
-  own page; Gingerbread blurs it over the dashboard.
+  own page; Gingerbread blurs it over the dashboard. In Gingerbread the finish
+  also clears the browser: the boards earlier runs left open, and every
+  remaining Bing or Bing Rewards tab, are closed — sparing the board it opens
+  and any pinned tab.
 - **Skip-when-done** — the routine never repeats work today's read says is
   already complete: search points at the cap, nothing pending to claim, daily
   set 3/3, visual search 1/1. Each skipped step is named in the activity log,
