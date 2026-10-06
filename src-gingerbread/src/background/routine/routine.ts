@@ -11,7 +11,7 @@ import type { Settings, StepId } from '../../shared/settings.ts'
 import { readRunState, updateRunState, currentStopEpoch, consumeRoutine } from '../core/run-state.ts'
 import { holdKeepAlive, releaseKeepAlive } from '../core/keepalive.ts'
 import { sleep } from '../core/delays.ts'
-import { closeTabs, closeOtherDashboardTabs } from '../core/tabs.ts'
+import { closeTabs, closeOtherDashboardTabs, closeBingRewardsTabs } from '../core/tabs.ts'
 import { setLastTabAction, setLastRewards, reportImageSearch } from '../core/log.ts'
 import { KEYS, getLocal, setLocal } from '../../shared/storage.ts'
 import type { Activities, SkippedStep, Stats } from '../../shared/storage.ts'
@@ -543,6 +543,11 @@ export async function endRoutine(): Promise<void> {
   // skipped as already done. Foreground and never auto-closed: the user is
   // the only one who takes the overlay down (Done blurs it out to their
   // board), and the Clear-tabs action exempts the dashboard's URL.
+  // Hoisted out of the try below so the sweep after it can spare this tab. A
+  // finish screen that failed to open leaves it null — nothing to spare, and
+  // the dashboard rule would have spared it anyway.
+  let finishTabId: number | null = null
+
   try {
     const summary = await routineSummaryQuery()
     const params = new URLSearchParams()
@@ -552,16 +557,33 @@ export async function endRoutine(): Promise<void> {
       url: `${FINISH_URL}${params.toString() ? `?${params.toString()}` : ''}`,
       active: true,
     })
+    finishTabId = finishTab.id ?? null
     // The finish screen is now the current dashboard; any dashboards left open
     // by earlier runs are stale, so close them (user request, 2026-09-26),
     // sparing the one just opened. Best-effort — never fails the finish.
-    await closeOtherDashboardTabs(finishTab.id ?? null)
+    await closeOtherDashboardTabs(finishTabId)
   } catch (e) {
     // The summary is a nicety, never a failure of the routine itself.
     console.warn('Routine: could not open the finish screen:', e)
   }
 
-  if (!ids.length) return
+  // The sweep's wider half (user request, 2026-10-06): the leftovers of a
+  // finished routine are not only the tabs it stashed. Its search tab, a manual
+  // run's tab, a Rewards page the user opened — anything still standing on Bing
+  // goes, so the board the finish overlay landed on is what they are left with.
+  // `ids` is spared on purpose: those tabs still have the grace period below to
+  // sit through (Bing credits the visit in that window), so this pass is for
+  // the strays and the two counts are reported together there. Best-effort — a
+  // tab that cannot be enumerated or closed never fails the finish.
+  const swept = await closeBingRewardsTabs([finishTabId, ...ids]).catch((e) => {
+    console.warn('Routine: the Bing tab sweep failed:', e)
+    return 0
+  })
+
+  if (!ids.length) {
+    if (swept) await setLastTabAction(`Closed ${swept} leftover Bing tab(s) after the routine`, true)
+    return
+  }
 
   // Stop checkpoint for the sweep below. Captured here rather than at the
   // top: by this point the routine genuinely finished, so a stop that landed
@@ -582,9 +604,13 @@ export async function endRoutine(): Promise<void> {
       return
     }
     const closed = await closeTabs(ids, settings.keepPinnedTabs)
-    if (closed) {
-      console.log(`Closed ${closed} tab(s) after the routine.`)
-      await setLastTabAction(`Closed ${closed} tab(s) after the routine`, true)
+    // One line for both halves of the sweep: the strays done above and the
+    // routine's own tabs here. They are disjoint — the strays were spared
+    // `ids` — so the sum is the count of tabs the finish actually closed.
+    const total = closed + swept
+    if (total) {
+      console.log(`Closed ${total} tab(s) after the routine.`)
+      await setLastTabAction(`Closed ${total} tab(s) after the routine`, true)
     }
   } finally {
     releaseKeepAlive()

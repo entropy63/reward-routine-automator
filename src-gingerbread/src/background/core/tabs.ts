@@ -17,6 +17,7 @@ import { currentStopEpoch, readRunState, updateRunState } from './run-state.ts'
 import { holdKeepAlive, releaseKeepAlive } from './keepalive.ts'
 import { sleep } from './delays.ts'
 import { setLastTabAction, STEP_LABEL } from './log.ts'
+import { isDashboardUrl, pickFinishSweep } from '../pure/finish-sweep.ts'
 
 // The capture bookkeeping's id: a startup StepId OR a synthetic one for
 // features outside the routine (src-donut used the plain string "coupons" the
@@ -261,8 +262,7 @@ function stashRoutineTabs(ids: number[]): Promise<unknown> {
 const DASHBOARD_URL = 'dashboard.html'
 
 function isDashboardTab(tab: chrome.tabs.Tab): boolean {
-  const urls = [tab.pendingUrl, tab.url].filter((u): u is string => Boolean(u))
-  return urls.some((url) => url.includes(DASHBOARD_URL))
+  return isDashboardUrl(tab.url, DASHBOARD_URL) || isDashboardUrl(tab.pendingUrl, DASHBOARD_URL)
 }
 
 // When a routine finishes it opens a fresh dashboard for the finish overlay to
@@ -291,6 +291,64 @@ export async function closeOtherDashboardTabs(keepTabId: number | null): Promise
     await chrome.tabs.remove(doomed)
   } catch (e) {
     console.warn('Finish: could not close prior dashboard tabs:', e)
+    return 0
+  }
+  return doomed.length
+}
+
+// The finish sweep's wider half (user request, 2026-10-06): a finished
+// routine's leftovers are not only the boards it opened. Its search tab, a
+// manual run's tab, a Rewards page the user opened — anything still standing on
+// Bing goes, so the finish screen is what the user is left looking at. Stale
+// dashboards are its sibling's job above; the picking is pickFinishSweep
+// (pure/finish-sweep.ts), which spares pinned tabs, dashboards and every id
+// handed in here.
+//
+// Best-effort exactly like that sibling: a tab that cannot be enumerated or
+// closed never fails the routine.
+export async function closeBingRewardsTabs(keepIds: Array<number | null | undefined>): Promise<number> {
+  let tabs: chrome.tabs.Tab[]
+  try {
+    tabs = await chrome.tabs.query({})
+  } catch (e) {
+    console.warn('Finish: could not enumerate Bing tabs to close:', e)
+    return 0
+  }
+
+  const settings = await getSettings()
+  // A live batch's tab is the one tab in range that is still in use — the sweep
+  // must never close the page a search is typing into.
+  const state = await readRunState()
+  const keep = [...keepIds]
+  if (state.batch && state.batch.tabId != null) keep.push(state.batch.tabId)
+
+  const doomed = pickFinishSweep(tabs, {
+    keepIds: keep,
+    keepPinned: settings.keepPinnedTabs,
+    dashboardMatch: DASHBOARD_URL,
+  })
+  if (!doomed.length) return 0
+
+  // The hazard closeTabs() already guards against, and the reason it is worth
+  // guarding here: removing every tab in a window closes the window with it, so
+  // a window that held nothing but Bing tabs would vanish. The window ids come
+  // free from the query above rather than a second tabs.get pass, and the guard
+  // itself only touches the user's own normal windows. Best-effort, like
+  // everything else here.
+  const closing = new Set(doomed)
+  const windowIds = new Set(
+    tabs.filter((tab) => tab.id != null && closing.has(tab.id)).map((tab) => tab.windowId),
+  )
+  try {
+    await keepWindowsAlive(doomed, windowIds)
+  } catch (e) {
+    console.warn('Finish: the window guard failed:', e)
+  }
+
+  try {
+    await chrome.tabs.remove(doomed)
+  } catch (e) {
+    console.warn('Finish: could not close Bing/Rewards tabs:', e)
     return 0
   }
   return doomed.length
