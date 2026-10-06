@@ -224,6 +224,12 @@ export interface BatchState {
   // open in the background, and finishing it must NOT trigger the startup
   // routine's pending steps. Absent on manual/routine batches.
   prowl?: boolean
+  // Set once the FIRST search of a regular batch has run by navigating the tab
+  // straight to Bing's results URL instead of typing into the search box (user
+  // request, 2026-10-06). Every search after it — and every search of a prowl
+  // batch — types as before. A batch is written fresh, so it never carries over
+  // from the last one, and a stop clears it along with the batch.
+  firstSearchDone?: boolean
 }
 
 export interface RightSizeRun {

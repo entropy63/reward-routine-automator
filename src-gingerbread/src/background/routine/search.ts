@@ -145,6 +145,40 @@ export async function startSearchBatch(opts: { count?: number; prowl?: boolean }
 let tickToken = 0
 let tickStartedAt = 0 // 0 = no tick in flight; otherwise Date.now() at its start
 
+// The first search of a REGULAR batch goes the way an address-bar search would:
+// the tab loads Bing's results URL directly, with no typing at all (user
+// request, 2026-10-06). Chrome gives an extension no way to type into the
+// omnibox and no way to read or change the browser's default search engine, so
+// the navigation an omnibox search performs is reproduced directly — and since
+// no browser setting is touched, there is nothing to restore afterwards.
+//
+// Searches after the first still type (injections/typed-search.ts), and a prowl
+// batch never takes this path. Returns false when the navigation could not be
+// issued, so the caller types instead.
+async function firstSearchNavigates(tabId: number, query: string, runId: number): Promise<boolean> {
+  try {
+    await chrome.tabs.update(tabId, {
+      url: `https://www.bing.com/search?q=${encodeURIComponent(query)}`,
+    })
+  } catch (e) {
+    console.warn('First search: direct navigation failed; typing instead:', e)
+    return false
+  }
+
+  // Marked only after the update was accepted: a rejected one leaves the flag
+  // unset, so the next beat retries the direct route rather than quietly
+  // switching the whole batch to typing.
+  await updateRunState((s) => {
+    if (s.batch && s.batch.runId === runId) s.batch.firstSearchDone = true
+  })
+
+  // The results page has to commit before the next beat's own wait runs — that
+  // wait reads a still-loading tab's status, and the page being replaced here is
+  // already 'complete'.
+  await waitForTabComplete(tabId)
+  return true
+}
+
 export async function tick(): Promise<void> {
   const now = Date.now()
   if (!tickShouldRun(tickStartedAt, now)) return
@@ -210,16 +244,23 @@ export async function tick(): Promise<void> {
     const { query, api } = await awaitedQuery()
     await setLocal(KEYS.lastQuery, { api, text: query })
 
+    // The first search of a regular batch is the address-bar one; every search
+    // after it — and every search of a prowl batch — types into the box.
+    const navigated =
+      !batch.prowl && !batch.firstSearchDone && (await firstSearchNavigates(tabId, query, runId))
+
     let busyMs = 0
-    try {
-      const [injection] = await chrome.scripting.executeScript({
-        target: { tabId },
-        func: performHumanTypedSearchOnBing,
-        args: [query],
-      })
-      busyMs = Number(injection && injection.result) || 0
-    } catch (e) {
-      console.warn('Search injection failed:', e)
+    if (!navigated) {
+      try {
+        const [injection] = await chrome.scripting.executeScript({
+          target: { tabId },
+          func: performHumanTypedSearchOnBing,
+          args: [query],
+        })
+        busyMs = Number(injection && injection.result) || 0
+      } catch (e) {
+        console.warn('Search injection failed:', e)
+      }
     }
 
     // The typing is done and the tab is navigating; the NEXT query's
