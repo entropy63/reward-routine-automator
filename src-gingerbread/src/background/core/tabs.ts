@@ -18,6 +18,7 @@ import { holdKeepAlive, releaseKeepAlive } from './keepalive.ts'
 import { sleep } from './delays.ts'
 import { setLastTabAction, STEP_LABEL } from './log.ts'
 import { isDashboardUrl, pickFinishSweep } from '../pure/finish-sweep.ts'
+import { createNormalTab } from './normal-tabs.ts'
 
 // The capture bookkeeping's id: a startup StepId OR a synthetic one for
 // features outside the routine (src-donut used the plain string "coupons" the
@@ -115,17 +116,17 @@ export function waitForTabComplete(tabId: number, timeoutMs = 20000): Promise<bo
 
 // Reuse the previous batch's tab if it is still open, so repeated batches don't
 // pile up tabs.
-// `background` (the prowl's mini-batches) opens a NEW tab behind the user's
-// current one instead of stealing focus midday. The reuse path needs no flag:
-// tabs.update never activates the tab.
-export async function ensureBingTab(existingTabId: number | null, background = false): Promise<number> {
+// Every search tab is selected inside its normal window, including prowl. This
+// does not bring the window to the OS foreground. Retain the old optional flag
+// for callers, but tab selection is now the same for every search batch.
+export async function ensureBingTab(existingTabId: number | null, _background = false): Promise<number> {
   if (existingTabId != null) {
     try {
       const tab = await chrome.tabs.get(existingTabId)
       // Only reclaim it if it's still a Bing tab — the user may have navigated
       // it somewhere else since the last batch.
       if (tab && String(tab.url || '').startsWith('https://www.bing.com/')) {
-        await chrome.tabs.update(existingTabId, { url: 'https://www.bing.com/' })
+        await chrome.tabs.update(existingTabId, { url: 'https://www.bing.com/', active: true })
         return existingTabId
       }
     } catch {
@@ -133,7 +134,7 @@ export async function ensureBingTab(existingTabId: number | null, background = f
     }
   }
 
-  const tab = await chrome.tabs.create({ url: 'https://www.bing.com/', active: !background })
+  const tab = await createNormalTab('https://www.bing.com/')
   return tab.id as number
 }
 
