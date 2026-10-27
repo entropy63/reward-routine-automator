@@ -26,7 +26,7 @@ folder, the name and the version line up:
 | 2 | Reward Routine Automator — Donut | 3.2.1 | `src-donut/` | plain JS, ESM |
 | 3 | Reward Routine Automator — Eclair | 4.1.1 | `src-eclair/` | plain JS, ESM |
 | 4 | Reward Routine Automator — Froyo | 5.1.1 | `src-froyo/` | plain JS, ESM |
-| 5 | Reward Routine Automator — Gingerbread | 6.9.9 | `src-gingerbread/` | React + TypeScript + Vite |
+| 5 | Reward Routine Automator — Gingerbread | 6.9.10 | `src-gingerbread/` | React + TypeScript + Vite |
 
 ## Features
 

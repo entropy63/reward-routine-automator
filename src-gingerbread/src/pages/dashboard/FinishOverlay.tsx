@@ -105,7 +105,6 @@ export function FinishOverlay({
       <div className="finish-card">
         <Confetti fire={animate} />
         {summary.dev && <div className="finish-dev">Preview · dev</div>}
-        <div className="finish-glyph" aria-hidden="true" />
         <h1 className="finish-title">Daily routine complete</h1>
         <p className="finish-sub">
           Reward Routine Automator finished its run.{' '}
