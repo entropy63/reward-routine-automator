@@ -9,6 +9,8 @@ setlocal
 title Reward Routine Automator - Gingerbread updater
 
 powershell -NoProfile -ExecutionPolicy Bypass -File "%~dp0Update Gingerbread.ps1" %*
+set "updaterExit=%errorlevel%"
 
 echo.
 pause
+exit /b %updaterExit%

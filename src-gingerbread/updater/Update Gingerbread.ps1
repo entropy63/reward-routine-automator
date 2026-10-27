@@ -50,15 +50,38 @@ $KeepDir = 'updater'
 
 function Write-Step($text) { Write-Host "  $text" }
 
-# The version out of a folder's manifest.json, or $null when there is no
-# readable manifest — the caller treats that as "not a valid extension folder".
+# Read and identify the build, not just a version-shaped field: a mislabeled
+# release asset must never install another variant over Gingerbread.
 function Get-ManifestVersion([string]$Dir) {
   $path = Join-Path $Dir 'manifest.json'
   if (-not (Test-Path -LiteralPath $path)) { return $null }
   try {
-    return (Get-Content -LiteralPath $path -Raw -Encoding UTF8 | ConvertFrom-Json).version
+    $manifest = Get-Content -LiteralPath $path -Raw -Encoding UTF8 | ConvertFrom-Json
+    $expectedName = 'Reward Routine Automator ' + [char]0x2014 + ' Gingerbread'
+    if ($manifest.manifest_version -ne 3 -or $manifest.name -cne $expectedName) { return $null }
+    if ($manifest.version -isnot [string] -or $manifest.version -notmatch '^\d+(\.\d+){0,3}$') { return $null }
+    $parts = @($manifest.version.Split('.'))
+    if (@($parts | Where-Object { $_.Length -gt 5 -or [int]$_ -gt 65535 }).Count) { return $null }
+    while ($parts.Count -lt 4) { $parts += '0' }
+    if ([version]($parts -join '.') -eq [version]'0.0.0.0') { return $null }
+    return $manifest.version
   } catch {
     return $null
+  }
+}
+
+function Get-ComparableVersion([string]$Version) {
+  $parts = @($Version.Split('.'))
+  while ($parts.Count -lt 4) { $parts += '0' }
+  return [version]($parts -join '.')
+}
+
+# A junction/symlink inside either tree could redirect a copy or removal outside
+# the chosen extension folder. Refuse it before the sync touches any files.
+function Assert-RegularTree([string]$Root) {
+  $entries = @((Get-Item -LiteralPath $Root -Force)) + @(Get-ChildItem -LiteralPath $Root -Recurse -Force)
+  if (@($entries | Where-Object { $_.Attributes -band [IO.FileAttributes]::ReparsePoint }).Count) {
+    throw "Linked folders or files are not supported: $Root"
   }
 }
 
@@ -88,7 +111,7 @@ $Target = (Resolve-Path -LiteralPath $Target).Path.TrimEnd('\')
 
 $current = Get-ManifestVersion $Target
 if (-not $current) {
-  Write-Host "No readable manifest.json in $Target." -ForegroundColor Red
+  Write-Host "No valid Gingerbread Manifest V3 extension in $Target." -ForegroundColor Red
   Write-Host 'Point this at the folder you load unpacked.' -ForegroundColor Red
   exit 1
 }
@@ -110,6 +133,7 @@ try {
 $asset = $null
 $release = $null
 foreach ($r in $releases) {
+  if ($r.draft -or $r.prerelease) { continue }
   $match = $r.assets | Where-Object { $_.name -like $AssetPattern } | Select-Object -First 1
   if ($match) { $release = $r; $asset = $match; break }
 }
@@ -137,15 +161,26 @@ try {
   # get as far as modifying a working install.
   $staged = Get-ManifestVersion $stageDir
   if (-not $staged) {
-    Write-Host 'The downloaded zip has no manifest.json at its root — refusing to touch your install.' -ForegroundColor Red
+    Write-Host 'The downloaded zip has no valid Gingerbread manifest at its root — refusing to touch your install.' -ForegroundColor Red
     exit 1
   }
   Write-Step "Available: $staged"
 
-  if ($staged -eq $current) {
+  if ((Get-ComparableVersion $staged) -le (Get-ComparableVersion $current)) {
     Write-Host ''
-    Write-Host "Already up to date ($current)." -ForegroundColor Green
+    Write-Host "Already up to date ($current); available $staged is not newer." -ForegroundColor Green
     exit 0
+  }
+
+  Assert-RegularTree $stageDir
+  Assert-RegularTree $Target
+  $manifest = Get-Content -LiteralPath (Join-Path $stageDir 'manifest.json') -Raw -Encoding UTF8 | ConvertFrom-Json
+  $entryPoints = @($manifest.background.service_worker, $manifest.action.default_popup)
+  if (-not $entryPoints[0] -or -not $entryPoints[1]) { throw 'The release is missing its worker or popup entry point.' }
+  foreach ($entry in $entryPoints) {
+    $full = [IO.Path]::GetFullPath((Join-Path $stageDir $entry))
+    if (-not $full.StartsWith($stageDir + '\', [StringComparison]::OrdinalIgnoreCase) -or
+        -not (Test-Path -LiteralPath $full -PathType Leaf)) { throw "Missing or invalid release entry point: $entry" }
   }
 
   # --- Sync ----------------------------------------------------------------
@@ -155,12 +190,16 @@ try {
   Write-Step "Updating $current -> $staged ..."
   Get-ChildItem -LiteralPath $stageDir -Recurse -File -Force | ForEach-Object {
     $rel = $_.FullName.Substring($stageDir.Length).TrimStart('\')
-    if (Test-Kept $rel) { return }
+    if ((Test-Kept $rel) -or $rel -eq 'manifest.json') { return }
     $dest = Join-Path $Target $rel
     $destDir = Split-Path -Parent $dest
     if (-not (Test-Path -LiteralPath $destDir)) { New-Item -ItemType Directory -Path $destDir -Force | Out-Null }
     Copy-Item -LiteralPath $_.FullName -Destination $dest -Force
   }
+
+  # The manifest is the Restart signal. Commit it only once every asset has
+  # copied successfully, so a failed copy cannot advertise a ready update.
+  Copy-Item -LiteralPath (Join-Path $stageDir 'manifest.json') -Destination (Join-Path $Target 'manifest.json') -Force
 
   # Vite emits content-hashed bundles, so without this pass every update would
   # leave the previous version's assets/*-<oldhash>.js behind forever.
@@ -195,5 +234,15 @@ try {
   Write-Host 'chrome://extensions.' -ForegroundColor Cyan
   Write-Host ''
 } finally {
-  Remove-Item -LiteralPath $work -Recurse -Force -ErrorAction SilentlyContinue
+  try {
+    $tempRoot = [IO.Path]::GetFullPath($env:TEMP).TrimEnd('\') + '\'
+    $cleanupPath = [IO.Path]::GetFullPath($work)
+    if (-not $cleanupPath.StartsWith($tempRoot, [StringComparison]::OrdinalIgnoreCase)) {
+      throw 'Staging cleanup escaped the temporary folder.'
+    }
+    Assert-RegularTree $cleanupPath
+    Remove-Item -LiteralPath $cleanupPath -Recurse -Force
+  } catch {
+    Write-Warning "Could not clean up staging folder $work : $($_.Exception.Message)"
+  }
 }

@@ -297,6 +297,21 @@ async function handleMessage(message: Message): Promise<MessageResponse> {
       // REFRESH_STATS: the Activity row carries the headline.
       probeRewardsApi()
       return { ok: true }
+    case 'RELOAD_EXTENSION': {
+      // The Restart control (6.9.8), shown on the popup's banner area and on
+      // the routine's finish screen only while an update is waiting on disk.
+      // The one-click updater writes the new files but cannot make Chrome load
+      // them — it holds the extension in memory and never re-reads the folder,
+      // and no API outside the extension can press Reload. This is the press.
+      //
+      // The response is sent FIRST: reload() tears the worker down, so a reply
+      // queued after it would never leave, and the caller would see a dead
+      // channel instead of an acknowledgement. Nothing waits on the answer —
+      // the popup closes itself on reload — but sending a shaped failure is
+      // worse than sending nothing.
+      setTimeout(() => chrome.runtime.reload(), 0)
+      return { ok: true }
+    }
     case 'routineConfirmAnswer':
       // The routine's confirm dialog reporting its buttons.
       answerRoutineConfirm(message.proceed)

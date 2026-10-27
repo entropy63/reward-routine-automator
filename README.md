@@ -26,7 +26,7 @@ folder, the name and the version line up:
 | 2 | Reward Routine Automator — Donut | 3.2.1 | `src-donut/` | plain JS, ESM |
 | 3 | Reward Routine Automator — Eclair | 4.1.1 | `src-eclair/` | plain JS, ESM |
 | 4 | Reward Routine Automator — Froyo | 5.1.1 | `src-froyo/` | plain JS, ESM |
-| 5 | Reward Routine Automator — Gingerbread | 6.9.7 | `src-gingerbread/` | React + TypeScript + Vite |
+| 5 | Reward Routine Automator — Gingerbread | 6.9.8 | `src-gingerbread/` | React + TypeScript + Vite |
 
 ## Features
 
@@ -193,6 +193,10 @@ history and the activity log.
   with a Copy button for pasting into a bug report.
 - **Developer options** — an API probe showing what the Rewards endpoints
   return, and a gate for experimental features.
+- **Restart when an update lands** — *(Gingerbread)*. Update the folder with the
+  bundled updater and a Restart button appears here and on the routine-finished
+  page, so applying the update is one click. It shows only while an update is
+  actually waiting, and clears itself once applied.
 
 ## How to install
 
@@ -223,3 +227,26 @@ then load `src-gingerbread/dist`.
 
 You must be signed in to bing.com in that browser profile — the extension
 automates the rewards you already have. It never signs in or creates accounts.
+
+### Updating — Gingerbread
+
+Gingerbread ships an updater inside its zip, beside `manifest.json`. Unzip a
+release once, then **double-click `updater\Update Gingerbread.cmd`** whenever you
+want the newest version. It finds the newest Gingerbread release, downloads it,
+and syncs it over the folder it is sitting in — no configuration, because the
+folder Chrome loads unpacked *is* the folder it was unzipped into.
+
+The files land immediately, but Chrome keeps running the version it already has
+in memory, and nothing outside the browser can press Reload for you. So the
+extension notices by itself: when the folder's `manifest.json` no longer matches
+the version Chrome loaded, a **Restart** button appears in the popup's
+notification area and on the routine-finished page. Press it, and the extension
+reloads onto the new files and the button disappears.
+
+Two things to know: the first release carrying the updater (6.9.8) is the one you
+download by hand — every update after that is the updater — and it never updates
+itself, since the running `.cmd` is locked while it executes. If the updater ever
+changes, the release notes will say so and you re-download that one file. The
+other four builds update the old way: unzip the new release over the folder and
+click Reload at `chrome://extensions`. Design in
+[ADR-024](docs/architecture/adr-024-one-click-updater.md).

@@ -1596,3 +1596,15 @@ body {
   padding: 12px 16px;
   font-size: 15px;
 }
+
+/* The Restart control beside Done (6.9.8) — shows only while an update is
+ * waiting on disk. Sized like Done but NOT flexing, so Done keeps the row and
+ * this reads as the secondary action. icon + label on one line. */
+.finish-restart {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  flex: none;
+  padding: 12px 16px;
+  font-size: 15px;
+}

@@ -11,10 +11,13 @@
 // — the summary survives until the user has actually acknowledged it.
 
 import { useState } from 'react'
+import { sendMessage } from '../../shared/messages.ts'
 import { STEP_LABEL } from '../../shared/settings.ts'
 import type { BackgroundStyle, StepId } from '../../shared/settings.ts'
 import { Background } from '../../popup/fx/Background.tsx'
 import { Confetti } from '../../popup/fx/Confetti.tsx'
+import { RestartIcon } from '../../popup/components/icons.tsx'
+import { usePendingUpdate } from '../../popup/hooks/usePendingUpdate.ts'
 
 // The ?q= summary is keyed by Activities keys (the streaks the user finishes),
 // ?s= by StepId (the routine steps skipped as already done). Two maps, one per
@@ -78,6 +81,7 @@ export function FinishOverlay({
   onClose: () => void
 }) {
   const [closing, setClosing] = useState(false)
+  const pending = usePendingUpdate()
   const allDone = summary.todo.length === 0
 
   const done = () => {
@@ -148,6 +152,23 @@ export function FinishOverlay({
         )}
 
         <div className="finish-actions">
+          {/* The Restart control (6.9.8), the only thing on this screen that is
+           * about the extension rather than the run. It appears only while an
+           * update is sitting on disk unloaded — see usePendingUpdate — and
+           * sits to the LEFT of Done so the screen's own verb stays last and
+           * keeps the primary weight. Both buttons use the popup's .btn set,
+           * which dashboard.html already loads. */}
+          {pending && (
+            <button
+              type="button"
+              className="btn finish-restart"
+              title="Reload the extension so Chrome runs the updated files."
+              onClick={() => sendMessage({ type: 'RELOAD_EXTENSION' })}
+            >
+              <RestartIcon />
+              Restart
+            </button>
+          )}
           <button className="btn btn--primary finish-done" onClick={done}>
             Done
           </button>

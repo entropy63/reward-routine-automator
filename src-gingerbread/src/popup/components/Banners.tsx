@@ -1,6 +1,9 @@
 import { AnimatePresence, motion } from 'framer-motion'
+import { sendMessage } from '../../shared/messages.ts'
 import type { Stats, StockNews } from '../../shared/storage.ts'
+import { usePendingUpdate } from '../hooks/usePendingUpdate.ts'
 import { useRestockNews, useSoldOutNews } from '../hooks/useRedeem.ts'
+import { RestartIcon } from './icons.tsx'
 
 // The banners above the stage (src-donut parity, 2026-09-03 wording kept): the
 // Bing-app warning (danger — the one step the routine genuinely cannot do,
@@ -8,6 +11,12 @@ import { useRestockNews, useSoldOutNews } from '../hooks/useRedeem.ts'
 // sold-out Overwatch amount (orange). NOT dismissible: the banners show while
 // the page's state says so, and the watch clears a record only when the
 // amount flips back — there is no close glyph on any of these.
+//
+// The update banner (6.9.8) is the exception, and deliberately so: it is the
+// one banner that IS dismissed — by doing the thing it asks. It shows while
+// the folder's manifest.json version differs from the loaded one and vanishes
+// the moment the restart lands, so it needs no close glyph either; it just
+// happens to be a button.
 //
 // The preview prop is the Developer Option "preview every banner" button's
 // sample payloads (DOM-only in src-donut, local state here): nothing touches
@@ -61,6 +70,40 @@ function NewsBanner({ news, prefix, tone }: { news: StockNews | null; prefix: st
   )
 }
 
+// The one banner with an action (6.9.8). It appears when the updater has
+// landed new files but Chrome is still running the old ones — see
+// usePendingUpdate for how that is detected without any bookkeeping. Pressing
+// it reloads the extension; the popup closes with the reload, and the banner
+// is gone next time because the loaded version finally matches the disk one.
+function UpdateBanner() {
+  const pending = usePendingUpdate()
+
+  return (
+    <AnimatePresence>
+      {pending && (
+        <motion.div
+          className="banner banner--update"
+          role="status"
+          initial={{ opacity: 0, height: 0, marginBottom: 0 }}
+          animate={{ opacity: 1, height: 'auto', marginBottom: 11 }}
+          exit={{ opacity: 0, height: 0, marginBottom: 0 }}
+        >
+          <span className="banner-text">Updated to {pending} — restart to apply.</span>
+          <button
+            type="button"
+            className="banner-btn"
+            title="Reload the extension so Chrome runs the updated files."
+            onClick={() => sendMessage({ type: 'RELOAD_EXTENSION' })}
+          >
+            <RestartIcon />
+            Restart
+          </button>
+        </motion.div>
+      )}
+    </AnimatePresence>
+  )
+}
+
 export function Banners({
   stats,
   preview,
@@ -85,6 +128,7 @@ export function Banners({
 
   return (
     <div className="banners">
+      <UpdateBanner />
       <BingAppBanner stats={previewStats} />
       <NewsBanner news={preview ? previewNews(['500 coins']) : restock} prefix="Overwatch coins available: " tone="good" />
       <NewsBanner news={preview ? previewNews(['2000 coins']) : soldOut} prefix="No longer available: " tone="warn" />

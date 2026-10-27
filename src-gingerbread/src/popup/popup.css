@@ -537,6 +537,46 @@
   border: 1px solid color-mix(in srgb, var(--warn) 30%, transparent);
 }
 
+/* The update banner (6.9.8) — the one banner carrying an ACTION. Every other
+ * banner is dismissed by the page's state flipping back; this one is dismissed
+ * by pressing it, so it lays out as a row with the button on the right and the
+ * sentence free to wrap on the left. Accent-toned rather than danger/warn: an
+ * update waiting is good news, not a problem. */
+.banner--update {
+  background: color-mix(in srgb, var(--accent) 15%, transparent);
+  color: var(--accent);
+  border: 1px solid color-mix(in srgb, var(--accent) 30%, transparent);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 9px;
+}
+
+.banner-text {
+  min-width: 0;
+}
+
+/* currentColor throughout, so the button rides whatever tone the banner is
+ * given and the icon colors itself from the parent's font (see icons.tsx). */
+.banner-btn {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 4px 9px;
+  border-radius: var(--r-sm);
+  border: 1px solid color-mix(in srgb, currentColor 35%, transparent);
+  background: color-mix(in srgb, currentColor 12%, transparent);
+  color: inherit;
+  font: inherit;
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.banner-btn:hover {
+  background: color-mix(in srgb, currentColor 22%, transparent);
+}
+
 /* ---------- the Redeem view's amount picker ---------- */
 .variant-list {
   list-style: none;

@@ -22,6 +22,7 @@ export type Message =
   | { type: 'CLEAR_ALL_TABS'; windowId?: number }
   | { type: 'RESET_ROUTINE_DAY' }
   | { type: 'PROBE_REWARDS_API' }
+  | { type: 'RELOAD_EXTENSION' }
   | { type: 'routineConfirmAnswer'; proceed: boolean }
 
 export type MessageType = Message['type']

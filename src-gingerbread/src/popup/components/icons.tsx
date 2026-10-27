@@ -117,6 +117,16 @@ export const FlaskIcon = (p: IconProps) => (
   </svg>
 )
 
+// The Restart control (6.9.8): a clockwise circular arrow, deliberately the
+// mirror of RedoIcon above so the two never read as the same button — a
+// restart reloads the whole extension, a redo clears one day's done-mark.
+export const RestartIcon = (p: IconProps) => (
+  <svg {...base(p)}>
+    <path d="M21 12a9 9 0 1 1-2.64-6.36" />
+    <path d="M21 3v6h-6" />
+  </svg>
+)
+
 // The full-screen dashboard opener (always in the topbar): a dashboard panel
 // glyph — four unequal panes.
 export const LayoutDashboardIcon = (p: IconProps) => (
