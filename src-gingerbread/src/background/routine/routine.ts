@@ -149,9 +149,9 @@ async function reportSkippedStep(id: StepId, reason: string): Promise<void> {
 // prompt's outcome crosses through here. Null while no prompt is waiting —
 // which is what makes a stale click after the timeout a no-op.
 let routineConfirmResolver: ((proceed: boolean) => void) | null = null
-// Tab id of that prompt, so tabs.onRemoved (wired in the background) can
+// Tab id of that prompt, so windows.onRemoved (wired in the background) can
 // distinguish a dismissed confirmation from unrelated tab closures.
-let routineConfirmTabId: number | null = null
+let routineConfirmWindowId: number | null = null
 
 // The routine's cancel-before-start dialog. Resolves true when the routine
 // may run ('Start now', the timeout, or no tabs API to ask with) and
@@ -160,7 +160,7 @@ let routineConfirmTabId: number | null = null
 // grace-period sleeps in closeCapturedTabs().
 export function confirmRoutineStart(): Promise<boolean> {
   // Very old Chrome: no API to ask with, so the routine is never blocked on it.
-  if (!(chrome.tabs && chrome.tabs.create)) {
+  if (!(chrome.windows && chrome.windows.create)) {
     return Promise.resolve(true)
   }
 
@@ -173,10 +173,10 @@ export function confirmRoutineStart(): Promise<boolean> {
       routineConfirmResolver = null
       // Taking the dialog down fires onRemoved too; the nulled resolver above
       // is what makes that a no-op. The remove() itself can reject if the
-      // tab is already gone — fine either way.
-      if (routineConfirmTabId != null) {
-        chrome.tabs.remove(routineConfirmTabId).catch(() => {})
-        routineConfirmTabId = null
+      // window is already gone — fine either way.
+      if (routineConfirmWindowId != null) {
+        chrome.windows.remove(routineConfirmWindowId).catch(() => {})
+        routineConfirmWindowId = null
       }
       resolve(proceed)
     }
@@ -189,25 +189,28 @@ export function confirmRoutineStart(): Promise<boolean> {
     // automator — proceed rather than dropping the routine on the floor.
     setTimeout(() => settle(true), ROUTINE_CONFIRM_TIMEOUT_MS)
 
-    chrome.tabs
+    chrome.windows
       .create({
         url: chrome.runtime.getURL('confirm.html'),
         // Select the normal tab inside Brave without bringing its OS window
         // to the foreground or creating a separate taskbar item.
-        active: true,
+        type: 'popup',
+        width: 510,
+        height: 350,
+        focused: true,
       })
-      .then((tab) => {
+      .then((win) => {
         // The prompt never went up — the routine must not hang waiting on an
         // answer nobody can give.
-        if (!tab) {
+        if (!win) {
           console.warn('Startup: confirm dialog could not be shown.')
           settle(true)
           return
         }
-        // A fast answer/timeout may have settled while tab creation waited.
+        // A fast answer/timeout may have settled while window creation waited.
         if (settled) {
-          if (tab.id != null) chrome.tabs.remove(tab.id).catch(() => {})
-        } else routineConfirmTabId = tab.id ?? null
+          if (win.id != null) chrome.windows.remove(win.id).catch(() => {})
+        } else routineConfirmWindowId = win.id ?? null
       })
       .catch((e) => {
         console.warn('Startup: confirm dialog could not be shown:', e)
@@ -223,12 +226,12 @@ export function answerRoutineConfirm(proceed: boolean): void {
   if (routineConfirmResolver) routineConfirmResolver(proceed === true)
 }
 
-// The prompt's tab closing without an answer (tabs.onRemoved, wired in the
-// background). Dismissing it is an explicit gesture, so closing the tab
+// The prompt's window closing without an answer (windows.onRemoved, wired in the
+// background). Dismissing it is an explicit gesture, so closing the window
 // counts as Cancel — only the 15s timeout (user away) proceeds on
 // its own.
-export function routineConfirmTabRemoved(tabId: number): void {
-  if (tabId !== routineConfirmTabId || !routineConfirmResolver) return
+export function routineConfirmWindowRemoved(windowId: number): void {
+  if (windowId !== routineConfirmWindowId || !routineConfirmResolver) return
   routineConfirmResolver(false)
 }
 

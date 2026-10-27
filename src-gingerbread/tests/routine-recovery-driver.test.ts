@@ -12,7 +12,7 @@ function makeStats(search = '57/60', image = '0/1') {
   return { at: Date.now(), searchPoints: search, readyToClaim: '0', activities: { visualSearch: image, dailySet: '3/3' } }
 }
 
-function harness(options: { enabled?: string[]; readings?: ReturnType<typeof makeStats>[]; stopDuringRead?: boolean; readFails?: boolean } = {}) {
+function harness(options: { enabled?: string[]; readings?: ReturnType<typeof makeStats>[]; stopDuringRead?: boolean; readFails?: boolean; deferConfirm?: boolean } = {}) {
   let stored: any = {
     v: 1, stopEpoch: 0, activity: null, batch: null, rightSizeRun: null,
     captures: { capturing: [], opened: {} },
@@ -28,6 +28,10 @@ function harness(options: { enabled?: string[]; readings?: ReturnType<typeof mak
   const searches: any[] = []
   const created: any[] = []
   const removed: number[] = []
+  const windows: any[] = []
+  const removedWindows: number[] = []
+  const timers: Array<() => void> = []
+  let completeConfirm: (() => void) | undefined
   const notes: string[] = []
   const data: Record<string, unknown> = {}
   const alarms = new Set<string>()
@@ -46,6 +50,14 @@ function harness(options: { enabled?: string[]; readings?: ReturnType<typeof mak
       tabs: {
         create: async (value: any) => { created.push(value); return { id: 80 } },
         remove: async (id: number) => { removed.push(id) },
+      },
+      windows: {
+        create: async (value: any) => {
+          windows.push(value)
+          if (options.deferConfirm) await new Promise<void>(resolve => { completeConfirm = resolve })
+          return { id: 90 }
+        },
+        remove: async (id: number) => { removedWindows.push(id) },
       },
       runtime: { getURL: (p: string) => `chrome-extension://fixture/${p}` },
     },
@@ -71,7 +83,7 @@ function harness(options: { enabled?: string[]; readings?: ReturnType<typeof mak
     startSearchBatch: async (value: any) => {
       searches.push(value); stored.batch = { runId: 1, remaining: value.count, tabId: 7, nextRunAt: 0 }
     },
-    setTimeout: () => 1,
+    setTimeout: (callback: () => void) => { timers.push(callback); return timers.length },
   })
   for (const file of ['core/run-state.ts', 'routine/routine.ts']) {
     const source = readFileSync(new URL(`../src/background/${file}`, import.meta.url), 'utf8')
@@ -81,7 +93,9 @@ function harness(options: { enabled?: string[]; readings?: ReturnType<typeof mak
     runInContext(script, context, { filename: file })
   }
   return {
-    searches, created, removed, data, notes, alarms,
+    searches, created, removed, data, notes, alarms, windows, removedWindows,
+    timeout: () => timers[0](),
+    completeConfirm: () => completeConfirm?.(),
     stored: () => stored,
     images: () => images,
     sweeps: () => sweeps,
@@ -149,17 +163,42 @@ test('worker wake resumes only an explicitly persisted final-recovery queue', as
   assert.equal(h.stored().routine, null)
 })
 
-test('confirmation uses a selected normal tab and closing it cancels', async () => {
+test('confirmation alone uses a popup window and closing that window cancels', async () => {
   const h = harness()
   const result = h.call('confirmRoutineStart()')
   await Promise.resolve()
-  assert.equal(h.created.length, 1)
-  assert.equal(h.created[0].active, true)
-  assert.equal(h.created[0].type, undefined)
-  assert.equal(h.created[0].focused, undefined)
-  h.call('routineConfirmTabRemoved(80)')
+  assert.equal(h.created.length, 0)
+  assert.equal(h.windows.length, 1)
+  assert.equal(h.windows[0].type, 'popup')
+  assert.equal(h.windows[0].width, 510)
+  assert.equal(h.windows[0].height, 350)
+  h.call('routineConfirmWindowRemoved(80)') // unrelated window cannot cancel
+  assert.deepEqual(h.removedWindows, [])
+  h.call('routineConfirmWindowRemoved(90)')
   assert.equal(await result, false)
-  assert.deepEqual(h.removed, [80])
+  assert.deepEqual(h.removedWindows, [90])
+  assert.deepEqual(h.removed, [])
+})
+
+test('accepting the confirmation closes only its popup window', async () => {
+  const h = harness()
+  const result = h.call('confirmRoutineStart()')
+  await Promise.resolve()
+  h.call('answerRoutineConfirm(true)')
+  assert.equal(await result, true)
+  assert.deepEqual(h.removedWindows, [90])
+  assert.deepEqual(h.removed, [])
+})
+
+test('confirmation timeout proceeds and closes a popup that finishes opening late', async () => {
+  const h = harness({ deferConfirm: true })
+  const result = h.call('confirmRoutineStart()')
+  h.timeout()
+  assert.equal(await result, true)
+  h.completeConfirm()
+  await new Promise(resolve => setImmediate(resolve))
+  assert.deepEqual(h.removedWindows, [90])
+  assert.deepEqual(h.removed, [])
 })
 
 test('an unreadable final check finishes with unverified labels rather than claiming completion', async () => {

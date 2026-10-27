@@ -40,7 +40,7 @@ import {
 import {
   runStartupSequence,
   answerRoutineConfirm,
-  routineConfirmTabRemoved,
+  routineConfirmWindowRemoved,
   resumeRoutineRecovery,
   ROUTINE_RECOVERY_ALARM,
   routineSummaryQuery,
@@ -147,7 +147,7 @@ chrome.tabs.onCreated.addListener((tab) => {
 // through handleMessage below; this is the other way the prompt can end.
 // Guarded like the prompt itself — a Chrome without the windows API must still
 // run.
-chrome.tabs.onRemoved.addListener(routineConfirmTabRemoved)
+chrome.windows.onRemoved.addListener(routineConfirmWindowRemoved)
 
 // Persisted work can outlive a worker. Re-arm its watchdog on any wake,
 // including when an alarm was lost across a full browser restart.

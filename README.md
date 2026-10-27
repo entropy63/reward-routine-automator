@@ -56,9 +56,10 @@ it, and **(Gingerbread)** means Gingerbread alone.
 - **Gingerbread recovery** ? final fresh stats can retry incomplete, enabled
   routine tasks in at most two recovery rounds. Further rounds require measured
   progress; missing stats or credit stops recovery with an Activity note.
-- **Normal browser tabs** ? Gingerbread's stats, orders and confirmation run in
+- **Normal browser tabs** ? Gingerbread's stats and orders run in
   existing normal windows. Search tabs are selected inside their window without
-  bringing that window to the OS foreground.
+  bringing that window to the OS foreground. The startup confirmation uses a
+  separate popup window.
 - **Image search** — one random image (picsum → thecatapi → a locally drawn
   canvas fallback) fed through Bing's visual-search dialog.
 - **Finish page** — a summary of what's left to do yourself (streaks in red)
