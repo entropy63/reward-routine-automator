@@ -17,6 +17,7 @@ import { KEYS, getLocal, setLocal } from '../../shared/storage.ts'
 import type { Activities, SkippedStep, Stats } from '../../shared/storage.ts'
 import { slotMissingDefaults } from '../pure/orders.ts'
 import { STEP_DONE_CHECKS, statsAreCurrent, stepSkipReason } from '../pure/verdicts.ts'
+import { planRoutineRecovery } from '../pure/routine-recovery.ts'
 import { refreshStats, checkRedeemAvailability } from './reads.ts'
 import { startSearchBatch } from './search.ts'
 import { runStartupClaim } from '../readers/claim.ts'
@@ -34,6 +35,8 @@ const FINISH_URL = 'dashboard.html'
 // The finish-page settle: after the last routine step, wait this long, then
 // re-read stats before building the summary — see endRoutine.
 const ROUTINE_FINISH_SETTLE_MS = 3000
+export const ROUTINE_RECOVERY_ALARM = 'routineRecovery'
+const ORIGINAL_STEP_LEASE_MS = 3 * 60_000
 
 // ---------- The step registry ----------
 
@@ -146,18 +149,18 @@ async function reportSkippedStep(id: StepId, reason: string): Promise<void> {
 // prompt's outcome crosses through here. Null while no prompt is waiting —
 // which is what makes a stale click after the timeout a no-op.
 let routineConfirmResolver: ((proceed: boolean) => void) | null = null
-// Window id of that dialog, so windows.onRemoved (wired in the background)
-// can tell it from any other window.
-let routineConfirmWindowId: number | null = null
+// Tab id of that prompt, so tabs.onRemoved (wired in the background) can
+// distinguish a dismissed confirmation from unrelated tab closures.
+let routineConfirmTabId: number | null = null
 
 // The routine's cancel-before-start dialog. Resolves true when the routine
-// may run ('Start now', the timeout, or no windows API to ask with) and
+// may run ('Start now', the timeout, or no tabs API to ask with) and
 // false when the user cancelled. The wait lives inside the async onStartup
 // handler, within the worker's 30s idle window — same pattern as the
 // grace-period sleeps in closeCapturedTabs().
 export function confirmRoutineStart(): Promise<boolean> {
   // Very old Chrome: no API to ask with, so the routine is never blocked on it.
-  if (!(chrome.windows && chrome.windows.create)) {
+  if (!(chrome.tabs && chrome.tabs.create)) {
     return Promise.resolve(true)
   }
 
@@ -170,10 +173,10 @@ export function confirmRoutineStart(): Promise<boolean> {
       routineConfirmResolver = null
       // Taking the dialog down fires onRemoved too; the nulled resolver above
       // is what makes that a no-op. The remove() itself can reject if the
-      // window is already gone — fine either way.
-      if (routineConfirmWindowId != null) {
-        chrome.windows.remove(routineConfirmWindowId).catch(() => {})
-        routineConfirmWindowId = null
+      // tab is already gone — fine either way.
+      if (routineConfirmTabId != null) {
+        chrome.tabs.remove(routineConfirmTabId).catch(() => {})
+        routineConfirmTabId = null
       }
       resolve(proceed)
     }
@@ -186,28 +189,25 @@ export function confirmRoutineStart(): Promise<boolean> {
     // automator — proceed rather than dropping the routine on the floor.
     setTimeout(() => settle(true), ROUTINE_CONFIRM_TIMEOUT_MS)
 
-    chrome.windows
+    chrome.tabs
       .create({
-        url: 'confirm.html',
-        type: 'popup',
-        // Sized to fit the React page-card (max-width 460 + the page's 24px
-        // body padding, and the card's full height) — the old 420×220 was
-        // sized for the plain pre-React page and clipped the card to a
-        // glyph-ish sliver, which read as a stray icon on the desktop rather
-        // than a dialog.
-        width: 510,
-        height: 350,
-        focused: true,
+        url: chrome.runtime.getURL('confirm.html'),
+        // Select the normal tab inside Brave without bringing its OS window
+        // to the foreground or creating a separate taskbar item.
+        active: true,
       })
-      .then((win) => {
+      .then((tab) => {
         // The prompt never went up — the routine must not hang waiting on an
         // answer nobody can give.
-        if (!win) {
+        if (!tab) {
           console.warn('Startup: confirm dialog could not be shown.')
           settle(true)
           return
         }
-        routineConfirmWindowId = win.id ?? null
+        // A fast answer/timeout may have settled while tab creation waited.
+        if (settled) {
+          if (tab.id != null) chrome.tabs.remove(tab.id).catch(() => {})
+        } else routineConfirmTabId = tab.id ?? null
       })
       .catch((e) => {
         console.warn('Startup: confirm dialog could not be shown:', e)
@@ -223,12 +223,12 @@ export function answerRoutineConfirm(proceed: boolean): void {
   if (routineConfirmResolver) routineConfirmResolver(proceed === true)
 }
 
-// The dialog's window closing without an answer (windows.onRemoved, wired in
-// the background). Dismissing the dialog is an explicit gesture, so closing
-// the window counts as Cancel — only the 15s timeout (user away) proceeds on
+// The prompt's tab closing without an answer (tabs.onRemoved, wired in the
+// background). Dismissing it is an explicit gesture, so closing the tab
+// counts as Cancel — only the 15s timeout (user away) proceeds on
 // its own.
-export function routineConfirmWindowRemoved(windowId: number): void {
-  if (windowId !== routineConfirmWindowId || !routineConfirmResolver) return
+export function routineConfirmTabRemoved(tabId: number): void {
+  if (tabId !== routineConfirmTabId || !routineConfirmResolver) return
   routineConfirmResolver(false)
 }
 
@@ -243,14 +243,26 @@ export function routineConfirmWindowRemoved(windowId: number): void {
 // complete' only when a read actually answered, not because a value went
 // missing. Returns '' when every answered streak is done — a query-less page
 // is the plain 'The daily routine finished.'
-export async function routineSummaryQuery(): Promise<string> {
+export async function routineSummaryQuery(
+  verification?: { enabledSteps: string[]; readStartedAt: number },
+): Promise<string> {
   const stats = await getLocal<Stats>(KEYS.lastStats)
   const activities: Partial<Activities> = (stats && stats.activities) || {}
   const parts: string[] = []
+  const fresh = !verification || (statsAreCurrent(stats) && Number(stats?.at) >= verification.readStartedAt && Number(stats?.at) <= Date.now())
+  const stepForActivity: Partial<Record<keyof Activities, StepId>> = {
+    bingSearch: 'search', dailySet: 'dailySet', visualSearch: 'imageSearch',
+  }
   for (const key of ['bingSearch', 'dailySet', 'bingApp', 'visualSearch'] as (keyof Activities)[]) {
-    const value = activities[key]
+    const enabled = verification?.enabledSteps.includes(stepForActivity[key] || '')
+    // The search streak alone is not the daily search-credit cap. A fresh
+    // 57/60 points read must remain visible even when the streak says 1/1.
+    const value = key === 'bingSearch' && enabled ? stats?.searchPoints : activities[key]
     const match = String(value == null ? '' : value).match(/(\d+)\s*\/\s*(\d+)\s*$/)
-    if (!match) continue // not answered — no verdict to report
+    if (!fresh || !match) {
+      if (enabled) parts.push(`${key}:not verified`)
+      continue
+    }
     const done = Number(match[1]) >= Number(match[2]) && Number(match[2]) > 0
     if (!done) parts.push(`${key}:${value}`)
   }
@@ -296,7 +308,30 @@ export function routineSkippedQuery(skipped: SkippedStep[]): string {
 // console.log nobody reads.
 export type StartupOutcome = 'ran' | 'disabled' | 'already-today' | 'cancelled'
 
+let sequenceStarting = false
 export async function runStartupSequence(
+  options: { manual?: boolean; scheduled?: boolean } = {},
+): Promise<StartupOutcome> {
+  if (sequenceStarting) return 'cancelled'
+  sequenceStarting = true
+  try {
+    const state = await readRunState()
+    if (state.routine || state.batch || state.activity) {
+      // A duplicate click never clears a live owner. It may recover an old
+      // worker's expired original routine, which otherwise blocks every later
+      // manual/startup attempt forever.
+      if (state.routine && !state.batch && !pendingTailInFlight && !routineFinishInFlight) {
+        await recoverInterruptedOriginalRoutine()
+      }
+      return 'cancelled'
+    }
+    return await runStartupSequenceOwned(options)
+  } finally {
+    sequenceStarting = false
+  }
+}
+
+async function runStartupSequenceOwned(
   { manual = false, scheduled = false }: { manual?: boolean; scheduled?: boolean } = {},
 ): Promise<StartupOutcome> {
   const settings = await getSettings()
@@ -365,9 +400,18 @@ export async function runStartupSequence(
   // tabs are stashed for endRoutine() instead of closed per step. The start
   // day is captured here so endRoutine() can credit THAT day, even if the
   // sequence finishes after midnight in a later worker instance.
+  // Arm first: eviction immediately after persisting the routine must leave
+  // a wake-up available. An alarm with no routine is harmless and self-clears.
+  await chrome.alarms.create(ROUTINE_RECOVERY_ALARM, { delayInMinutes: 1, periodInMinutes: 1 })
   await updateRunState((state) => {
-    state.routine = { startDay: localDayKey(), pendingSteps: [], pendingTabs: [], skipped: [] }
+    if (state.stopEpoch === myEpoch) {
+      state.routine = {
+        startDay: localDayKey(), pendingSteps: [], pendingTabs: [], skipped: [], enabledSteps: queue,
+        ownerUntilAt: Date.now() + ORIGINAL_STEP_LEASE_MS,
+      }
+    }
   })
+  if ((await currentStopEpoch()) !== myEpoch) return 'cancelled'
 
   // A fresh read before the steps: the skip-when-done verdicts below must
   // judge the dashboard as it is NOW, not as an older same-day read left it —
@@ -386,6 +430,7 @@ export async function runStartupSequence(
     // Stop checkpoint: a bumped epoch means the remaining steps, this one
     // included, are cancelled.
     if ((await currentStopEpoch()) !== myEpoch) break
+    await renewOriginalStepLease(myEpoch)
 
     // Skip-when-done: a step whose today's read already shows complete never
     // runs — no search batch at 60/60, no claim at 0 pending. Checked before
@@ -397,6 +442,7 @@ export async function runStartupSequence(
       await reportSkippedStep(id, skipReason)
       continue
     }
+    if ((await currentStopEpoch()) !== myEpoch) break
 
     // The batch runs for minutes after startSearchBatch() resolves, so the rest
     // of the sequence is handed to finishBatch() instead of racing it. The
@@ -434,66 +480,103 @@ export async function runStartupSequence(
   return 'ran'
 }
 
-// The tail of the startup sequence, once the web search batch has finished.
-export async function runPendingStartupSteps(): Promise<void> {
-  const state = await readRunState()
-  // Also reached when the batch was the last step: the queue is empty but the
-  // routine is still live, and the stashed tabs still need their sweep.
-  if (!state.routine) return
-  const queue = state.routine.pendingSteps as StepId[]
-  if (!queue.length) {
-    await endRoutine()
-    return
-  }
+// One tail owner per worker. Its queue is shifted durably before each effect,
+// so an eviction leaves the unstarted steps available to the recovery wake-up.
+let pendingTailInFlight = false
+let routineFinishInFlight = false
 
-  // Same stop checkpoint as the main sequence. Captured BEFORE the queue is
-  // claimed below: a stop landing between the claim and the capture would
-  // otherwise slip past this checkpoint, and the whole tail would run after
-  // the stop it was supposed to see.
-  const myEpoch = await currentStopEpoch()
-
-  // Claim the queue before running it: a step that starts another batch must
-  // not be able to trigger this a second time.
-  await updateRunState((s) => {
-    if (s.routine) s.routine.pendingSteps = []
+async function renewOriginalStepLease(epoch: number): Promise<void> {
+  await updateRunState(state => {
+    if (state.stopEpoch === epoch && state.routine && !state.routine.recovering) {
+      state.routine.ownerUntilAt = Date.now() + ORIGINAL_STEP_LEASE_MS
+    }
   })
+}
 
-  // The tail re-reads before judging the claim: the search batch just spent
-  // minutes earning points, and 'ready to claim' is the one verdict-carrying
-  // number those searches can move — an answer captured before the batch must
-  // not skip a claim the batch itself earned. The other verdicts (daily set,
-  // visual search) are untouched by web searches, and a stats step leading
-  // this tail queue is itself the read.
-  if (queue.includes('claim') && queue[0] !== 'stats') {
-    await refreshStats()
-  }
+// A newly awakened worker cannot resume the JS stack of an interrupted
+// original step. After its lease expires, inspect actual fresh Rewards stats
+// and use bounded final recovery instead of blindly replaying the whole run.
+async function recoverInterruptedOriginalRoutine(): Promise<boolean> {
+  const state = await readRunState()
+  if (!state.routine || state.routine.recovering || state.batch ||
+      Number(state.routine.ownerUntilAt || 0) > Date.now()) return false
+  let claimed = false
+  await updateRunState(s => {
+    if (s.stopEpoch !== state.stopEpoch || !s.routine || s.routine.recovering || s.batch ||
+        Number(s.routine.ownerUntilAt || 0) > Date.now()) return
+    s.routine.recovering = true
+    s.routine.pendingSteps = []
+    s.activity = null // this owner belonged to the expired worker
+    s.captures.capturing = []
+    claimed = true
+  })
+  if (claimed) await endRoutine()
+  return claimed
+}
 
-  for (const id of queue) {
-    if ((await currentStopEpoch()) !== myEpoch) break
+async function runQueuedStartupSteps(): Promise<void> {
+  const initial = await readRunState()
+  if (!initial.routine || initial.batch) return
+  const myEpoch = initial.stopEpoch
+  const queue = initial.routine.pendingSteps
+  if (queue.includes('claim') && queue[0] !== 'stats') await refreshStats()
 
+  while (true) {
+    const state = await readRunState()
+    if (state.stopEpoch !== myEpoch || !state.routine || state.batch) return
+    const id = state.routine.pendingSteps[0] as StepId | undefined
+    if (!id) return
+    let claimed = false
+    await updateRunState(s => {
+      if (s.stopEpoch === myEpoch && s.routine?.pendingSteps[0] === id && !s.batch) {
+        s.routine.pendingSteps.shift()
+        claimed = true
+      }
+    })
+    if (!claimed) return
+    await renewOriginalStepLease(myEpoch)
     const step = STARTUP_STEPS[id]
-    if (!step || id === 'search') continue
-
-    // Same skip-when-done verdict as the main loop — the post-search tail
-    // holds steps too, and a fresh claim/daily-set/image-search answer in
-    // today's read skips them here exactly as it would have inline.
-    const skipReason = await routineStepSkipped(id)
-    if (skipReason) {
-      console.log(`Startup: skipping "${id}" — ${skipReason}.`)
-      await reportSkippedStep(id, skipReason)
+    const settings = await getSettings()
+    if (!step || id === 'search' || !settings[step.enabledKey]) continue
+    if ((await currentStopEpoch()) !== myEpoch) return
+    const reason = await routineStepSkipped(id)
+    if (reason) {
+      await reportSkippedStep(id, reason)
       continue
     }
-
+    if ((await currentStopEpoch()) !== myEpoch) return
     try {
       await step.run()
-    } catch (e) {
-      console.warn(`Startup: step "${id}" failed:`, e)
+    } catch (error) {
+      console.warn('Routine: queued step failed:', id, error)
     }
   }
+}
 
-  // A no-op after a stop: the stop write already nulled the routine, so the
-  // stashed tabs stay open with everything else.
-  await endRoutine()
+// The normal post-search tail also resumes a persisted final-recovery queue.
+export async function runPendingStartupSteps(): Promise<void> {
+  if (pendingTailInFlight) return
+  pendingTailInFlight = true
+  try {
+    await runQueuedStartupSteps()
+    await endRoutine()
+  } finally {
+    pendingTailInFlight = false
+  }
+}
+
+// The background entry point calls this on worker wake/watchdog. Initial
+// routines are not replayed; only a final verification/recovery already marked
+// in storage is resumed, and an active search batch remains its own owner.
+export async function resumeRoutineRecovery(): Promise<void> {
+  if (sequenceStarting || pendingTailInFlight || routineFinishInFlight) return
+  const state = await readRunState()
+  if (!state.routine) {
+    await chrome.alarms.clear(ROUTINE_RECOVERY_ALARM)
+    return
+  }
+  if (state.routine?.recovering && !state.batch) await runPendingStartupSteps()
+  else if (!state.batch) await recoverInterruptedOriginalRoutine()
 }
 
 // The end of a startup sequence. In routine mode this is the one moment the
@@ -501,11 +584,84 @@ export async function runPendingStartupSteps(): Promise<void> {
 // don't need to care which mode they're in. A routine that genuinely finished
 // also marks the day it started as done for the once-per-day gate.
 export async function endRoutine(): Promise<void> {
+  if (routineFinishInFlight) return
+  routineFinishInFlight = true
+  holdKeepAlive()
+  try {
+    await verifyAndFinishRoutine()
+  } finally {
+    routineFinishInFlight = false
+    releaseKeepAlive()
+  }
+}
+
+async function verifyAndFinishRoutine(): Promise<void> {
+  const initial = await readRunState()
+  if (!initial.routine || initial.batch) return
+  const myEpoch = initial.stopEpoch
+  await updateRunState(state => {
+    if (state.stopEpoch === myEpoch && state.routine) state.routine.recovering = true
+  })
+  // Persist the wake-up before the first settle/read. A worker eviction here
+  // must not strand a routine with its completion marker still unwritten.
+  await chrome.alarms.create(ROUTINE_RECOVERY_ALARM, { delayInMinutes: 1, periodInMinutes: 1 })
+  let finalReadStartedAt = 0
+
+  // Every retry round is reserved in storage before starting effects. Stop
+  // still owns the routine until the last fresh verification is complete.
+  while (true) {
+    if ((await currentStopEpoch()) !== myEpoch) return
+    let readStarted = Date.now()
+    try {
+      await sleep(ROUTINE_FINISH_SETTLE_MS)
+      if ((await currentStopEpoch()) !== myEpoch) return
+      readStarted = Date.now()
+      finalReadStartedAt = readStarted
+      await refreshStats()
+    } catch (error) {
+      console.warn('Routine: final verification read failed:', error)
+    }
+    const state = await readRunState()
+    if (state.stopEpoch !== myEpoch || !state.routine || state.batch) return
+    const settings = await getSettings()
+    const stats = await getLocal<Stats>(KEYS.lastStats)
+    const plan = planRoutineRecovery(stats, readStarted, state.routine.enabledSteps || [], settings,
+      state.routine.recoveryRound || 0, state.routine.recoveryProgress || {})
+    if (!plan.steps.length) {
+      if (plan.reason === 'limit' || plan.reason === 'no-progress' || plan.reason === 'stale-read') {
+        await setLastTabAction('Routine verification stopped: ' + plan.reason + '; remaining work needs a later check', null)
+      }
+      break
+    }
+    let reserved = false
+    await updateRunState(s => {
+      if (s.stopEpoch !== myEpoch || !s.routine || s.batch) return
+      s.routine.recoveryRound = (s.routine.recoveryRound || 0) + 1
+      s.routine.recoveryProgress = plan.progress
+      s.routine.pendingSteps = plan.steps.filter(id => id !== 'search')
+      reserved = true
+    })
+    if (!reserved || (await currentStopEpoch()) !== myEpoch) return
+    await setLastTabAction('Routine verification: retrying ' + plan.steps.join(', '), null)
+    if ((await currentStopEpoch()) !== myEpoch) return
+    if (plan.steps.includes('search')) {
+      try {
+        await startSearchBatch({ count: plan.searchCount })
+        return // its finish hands the durable auxiliary queue back above
+      } catch (error) {
+        console.warn('Routine: recovery search could not start:', error)
+      }
+    }
+    await runQueuedStartupSteps()
+  }
+  if ((await currentStopEpoch()) !== myEpoch) return
+
   // Read the routine and clear it as ONE step — a stop landing between the
   // read and the clear would otherwise let a stopped routine sweep its
   // stashed tabs.
   const consumed = await consumeRoutine()
   if (!consumed) return
+  await chrome.alarms.clear(ROUTINE_RECOVERY_ALARM)
 
   // Only a live routine gets this far, i.e. a routine truly finished (inline
   // end or post-search-batch tail — both land here). A stopped routine never
@@ -516,23 +672,6 @@ export async function endRoutine(): Promise<void> {
   // ever getting its routine.
   await setLocal(KEYS.lastRoutineDay, consumed.startDay || localDayKey())
 
-  // The finish-page timing fix (REQUEST #1): the streak-completing steps —
-  // image search and the daily set — only read as done in a stats read taken
-  // AFTER they run, but the routine's opening read (and the search
-  // right-sizing) happened BEFORE them. Without a final re-read the finish
-  // page would list a just-completed visual-search or daily-set streak as
-  // still pending. So settle briefly (Bing credits within seconds), then
-  // re-read, so routineSummaryQuery() below reflects post-step streak state.
-  // Guarded: a read is a convenience, never a reason the finish page fails to
-  // open — refreshStats never throws, but the settle and the call are wrapped
-  // regardless.
-  try {
-    await sleep(ROUTINE_FINISH_SETTLE_MS)
-    await refreshStats()
-  } catch (e) {
-    console.warn('Routine: the finish-page stats re-read failed:', e)
-  }
-
   const skippedQuery = routineSkippedQuery(consumed.skipped)
   const ids = consumed.pendingTabs.filter((id) => typeof id === 'number')
 
@@ -540,7 +679,7 @@ export async function endRoutine(): Promise<void> {
   // whatever the routine's tabs last showed — so the dashboard opens instead,
   // its overlay saying the routine is done and listing the streaks they have
   // to finish themselves (the Bing-app check-in, usually) and the steps it
-  // skipped as already done. Foreground and never auto-closed: the user is
+  // skipped as already done. Selected in its browser window and never auto-closed: the user is
   // the only one who takes the overlay down (Done blurs it out to their
   // board), and the Clear-tabs action exempts the dashboard's URL.
   // Hoisted out of the try below so the sweep after it can spare this tab. A
@@ -549,7 +688,7 @@ export async function endRoutine(): Promise<void> {
   let finishTabId: number | null = null
 
   try {
-    const summary = await routineSummaryQuery()
+    const summary = await routineSummaryQuery({ enabledSteps: consumed.enabledSteps || [], readStartedAt: finalReadStartedAt })
     const params = new URLSearchParams()
     if (summary) params.set('q', summary)
     if (skippedQuery) params.set('s', skippedQuery)
@@ -584,11 +723,6 @@ export async function endRoutine(): Promise<void> {
     if (swept) await setLastTabAction(`Closed ${swept} leftover Bing tab(s) after the routine`, true)
     return
   }
-
-  // Stop checkpoint for the sweep below. Captured here rather than at the
-  // top: by this point the routine genuinely finished, so a stop that landed
-  // earlier was already caught by the consume guard above.
-  const myEpoch = await currentStopEpoch()
 
   const settings = await getSettings()
   const graceMs = Math.max(0, Number(settings.tabCloseDelaySec) || 0) * 1000

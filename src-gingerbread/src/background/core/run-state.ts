@@ -64,6 +64,12 @@ export async function readRunState(): Promise<RunState> {
         remaining: Number(stored.batch.remaining) || 0,
         tabId: typeof stored.batch.tabId === 'number' ? stored.batch.tabId : null,
         nextRunAt: Number.isFinite(stored.batch.nextRunAt) ? stored.batch.nextRunAt : null,
+        retryCount: Math.max(0, Math.min(3, Math.floor(Number(stored.batch.retryCount) || 0))),
+        attemptId: Math.max(0, Math.floor(Number(stored.batch.attemptId) || 0)),
+        attemptStartedAt: Number.isFinite(stored.batch.attemptStartedAt) ? stored.batch.attemptStartedAt : 0,
+        ...(isPlainObject(stored.batch.pendingQuery) && typeof stored.batch.pendingQuery.query === 'string'
+          ? { pendingQuery: { query: stored.batch.pendingQuery.query.slice(0, 90), api: String(stored.batch.pendingQuery.api || 'retry') } }
+          : {}),
         ...(stored.batch.prowl === true ? { prowl: true } : {}),
       }
     : null
@@ -87,11 +93,17 @@ export async function readRunState(): Promise<RunState> {
           ? stored.routine.pendingTabs.filter((id: unknown): id is number => typeof id === 'number')
           : [],
         skipped: Array.isArray(stored.routine.skipped) ? ([...stored.routine.skipped] as SkippedStep[]) : [],
+        ...(Array.isArray(stored.routine.enabledSteps) ? { enabledSteps: stored.routine.enabledSteps.filter((id: unknown): id is string => typeof id === 'string') } : {}),
+        ...(Number.isFinite(stored.routine.recoveryRound) ? { recoveryRound: Math.max(0, Math.min(2, Math.floor(stored.routine.recoveryRound))) } : {}),
+        ...(isPlainObject(stored.routine.recoveryProgress) ? { recoveryProgress: Object.fromEntries(Object.entries(stored.routine.recoveryProgress).filter(([, value]) => Number.isFinite(value))) as Record<string, number> } : {}),
+        ...(stored.routine.recovering === true ? { recovering: true } : {}),
+        ...(Number.isFinite(stored.routine.ownerUntilAt) ? { ownerUntilAt: Math.max(0, stored.routine.ownerUntilAt) } : {}),
       }
     : null
 
   return {
     v: 1,
+    batchSequence: Math.max(0, ...[stored.batchSequence, batch?.runId].filter((id): id is number => Number.isSafeInteger(id))),
     stopEpoch: Number(stored.stopEpoch) || 0,
     activity: isPlainObject(stored.activity) ? { label: String(stored.activity.label ?? '') } : null,
     batch,

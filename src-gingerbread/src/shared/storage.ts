@@ -220,6 +220,10 @@ export interface BatchState {
   remaining: number
   tabId: number | null
   nextRunAt: number | null
+  retryCount?: number
+  attemptId?: number
+  attemptStartedAt?: number
+  pendingQuery?: { query: string; api: string }
   // Set on a prowl batch (the 15–45-minute background mini-batches): its tabs
   // open in the background, and finishing it must NOT trigger the startup
   // routine's pending steps. Absent on manual/routine batches.
@@ -242,6 +246,11 @@ export interface RoutineState {
   pendingSteps: string[]
   pendingTabs: number[]
   skipped: SkippedStep[]
+  enabledSteps?: string[]
+  recoveryRound?: number
+  recoveryProgress?: Record<string, number>
+  recovering?: boolean
+  ownerUntilAt?: number
 }
 
 export interface Captures {
@@ -251,6 +260,7 @@ export interface Captures {
 
 export interface RunState {
   v: 1
+  batchSequence?: number
   stopEpoch: number
   activity: { label: string } | null
   batch: BatchState | null

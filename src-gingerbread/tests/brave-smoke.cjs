@@ -1,0 +1,88 @@
+// Offline integration check in a disposable Brave profile. Requires the repo's
+// existing @playwright/test installation (or NODE_PATH pointing to it).
+const { chromium } = require('@playwright/test');
+const { mkdtempSync, readFileSync, rmSync } = require('node:fs');
+const { tmpdir } = require('node:os');
+const path = require('node:path');
+const assert = require('node:assert/strict');
+const { stripTypeScriptTypes } = require('node:module');
+const { runInNewContext } = require('node:vm');
+
+(async () => {
+  const profile = mkdtempSync(path.join(tmpdir(), 'gingerbread-brave-fixture-'));
+  const build = path.resolve(__dirname, '../dist');
+  const executablePath = process.env.BRAVE_EXECUTABLE || path.join(process.env.ProgramFiles || 'C:/Program Files', 'BraveSoftware/Brave-Browser/Application/brave.exe');
+  let context;
+  try {
+    context = await chromium.launchPersistentContext(profile, {
+      executablePath, headless: true,
+      args: [`--disable-extensions-except=${build}`, `--load-extension=${build}`, '--no-first-run'],
+    });
+    const submitted = [];
+    await context.route('https://**/*', async route => {
+      const url = new URL(route.request().url());
+      if (url.hostname !== 'www.bing.com') return route.fulfill({ status: 404, body: 'offline fixture' });
+      if (url.pathname === '/search') submitted.push(url.searchParams.get('q'));
+      await route.fulfill({ contentType: 'text/html', body: '<!doctype html><form id="sb_form" action="/search"><input id="sb_form_q" name="q"><button id="sb_form_go" type="submit">Search</button></form>' });
+    });
+    const worker = context.serviceWorkers()[0] || await context.waitForEvent('serviceworker', { timeout: 15000 });
+    const extensionId = new URL(worker.url()).hostname;
+    const control = await context.newPage();
+    await control.goto(`chrome-extension://${extensionId}/index.html`);
+    await control.waitForFunction(async () => !!(await chrome.storage.sync.get('settings')).settings);
+    await control.evaluate(async () => {
+      const { settings } = await chrome.storage.sync.get('settings');
+      await chrome.storage.sync.set({ settings: { ...settings, randomSearchEnabled: false, scheduledRunEnabled: false,
+        searchesPerBatch: 2, rightSizeSearchBatch: false, querySourceOrder: ['local'],
+        minDelaySec: 0, maxDelaySec: 0, closeTabsAfterSearch: false, refreshStatsOnPopupOpen: false } });
+    });
+    const started = await control.evaluate(() => chrome.runtime.sendMessage({ type: 'START_SEARCH_BATCH' }));
+    assert.equal(started.ok, true);
+    const until = Date.now() + 90000;
+    let finalState;
+    while (Date.now() < until) {
+      finalState = await control.evaluate(() => chrome.storage.local.get(['runState', 'lastTabAction']));
+      if (finalState.runState && !finalState.runState.batch) break;
+      await new Promise(resolve => setTimeout(resolve, 250));
+    }
+    assert.ok(finalState.runState && !finalState.runState.batch, 'batch must terminate within fixture deadline');
+    assert.equal(submitted.length, 2, 'each confirmed submission must navigate once');
+    const tabs = await worker.evaluate(() => chrome.tabs.query({}));
+    const searchTab = tabs.find(tab => tab.url?.startsWith('https://www.bing.com/search'));
+    assert.ok(searchTab?.active, 'search tab selected inside its window');
+    const windows = await worker.evaluate(() => chrome.windows.getAll({}));
+    assert.ok(windows.every(window => window.type === 'normal'), 'no popup/standalone window');
+
+    // Validate the real isolated-world storage/Stop lease, not just DOM typing.
+    const page = context.pages().find(page => page.url().startsWith('https://www.bing.com/search'));
+    await page.goto('https://www.bing.com/');
+    await control.evaluate(async tabId => {
+      await chrome.storage.local.set({ runState: { v: 1, stopEpoch: 9, activity: null, routine: null,
+        rightSizeRun: null, captures: { capturing: [], opened: {} },
+        batch: { runId: 999, remaining: 1, tabId, attemptId: 1, attemptStartedAt: Date.now(), nextRunAt: Date.now() + 120000 } } });
+    }, searchTab.id);
+    const raw = stripTypeScriptTypes(readFileSync(path.resolve(__dirname, '../src/background/injections/typed-search.ts'), 'utf8')).replace(/^export /gm, '');
+    const typed = runInNewContext(raw + '; performHumanTypedSearchOnBing');
+    const injection = worker.evaluate(`(async () => {
+      const typed = ${typed.toString()};
+      return chrome.scripting.executeScript({target:{tabId:${searchTab.id}},func:typed,args:['cancel this search',{runId:999,attemptId:1,stopEpoch:9,expiresAt:Date.now()+60000}]});
+    })()`);
+    const typing = await Promise.race([
+      page.waitForFunction(() => document.querySelector('#sb_form_q').value.length > 0).then(() => ({ started: true })),
+      injection.then(reply => ({ reply })),
+    ]);
+    assert.equal(typing.started, true, 'typing must start before Stop: ' + JSON.stringify(typing));
+    await control.evaluate(() => chrome.runtime.sendMessage({ type: 'STOP_BATCH' }));
+    const reply = await injection;
+    assert.equal(reply[0].result.ok, false);
+    assert.equal(submitted.length, 2, 'Stop must prevent the third submission');
+    console.log(JSON.stringify({ passed: true, version: '6.9.9', browser: 'Brave', submissions: 2,
+      selectedSearchTab: true, onlyNormalWindows: true, stopPreventedSubmission: true,
+      scope: 'offline fixture, disposable profile, no live Rewards account' }));
+  } finally {
+    if (context) await context.close();
+    const resolved = path.resolve(profile);
+    if (!resolved.startsWith(path.resolve(tmpdir()) + path.sep) || !path.basename(resolved).startsWith('gingerbread-brave-fixture-')) throw Error('Unsafe fixture cleanup path');
+    rmSync(resolved, { recursive: true, force: true });
+  }
+})().catch(error => { console.error(error); process.exitCode = 1; });

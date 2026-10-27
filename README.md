@@ -26,7 +26,7 @@ folder, the name and the version line up:
 | 2 | Reward Routine Automator — Donut | 3.2.1 | `src-donut/` | plain JS, ESM |
 | 3 | Reward Routine Automator — Eclair | 4.1.1 | `src-eclair/` | plain JS, ESM |
 | 4 | Reward Routine Automator — Froyo | 5.1.1 | `src-froyo/` | plain JS, ESM |
-| 5 | Reward Routine Automator — Gingerbread | 6.9.8 | `src-gingerbread/` | React + TypeScript + Vite |
+| 5 | Reward Routine Automator — Gingerbread | 6.9.9 | `src-gingerbread/` | React + TypeScript + Vite |
 
 ## Features
 
@@ -49,11 +49,16 @@ it, and **(Gingerbread)** means Gingerbread alone.
   number you set. **Automatic** checks how many points the day still needs,
   runs only the searches still needed (3 points each, never past the cap),
   re-checks after the batch, and runs more while the points keep moving — up to
-  three batches. In Gingerbread the **first search of a batch loads Bing's
-  results URL directly** instead of typing into the search box — the closest an
-  extension can come to an address-bar search, since Chrome exposes no API for
-  the omnibox or for the browser's default search engine. Every search after
-  the first types as usual.
+  three batches. Gingerbread types every query into Bing's search box. Failed
+  or interrupted attempts are retried with deadlines and persisted state; they
+  do not reduce the remaining count. The results navigation confirms a
+  submission, while a fresh Rewards read determines actual credit.
+- **Gingerbread recovery** ? final fresh stats can retry incomplete, enabled
+  routine tasks in at most two recovery rounds. Further rounds require measured
+  progress; missing stats or credit stops recovery with an Activity note.
+- **Normal browser tabs** ? Gingerbread's stats, orders and confirmation run in
+  existing normal windows. Search tabs are selected inside their window without
+  bringing that window to the OS foreground.
 - **Image search** — one random image (picsum → thecatapi → a locally drawn
   canvas fallback) fed through Bing's visual-search dialog.
 - **Finish page** — a summary of what's left to do yourself (streaks in red)

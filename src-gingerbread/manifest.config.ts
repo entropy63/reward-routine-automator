@@ -341,7 +341,9 @@ export default defineManifest({
   // press Reload. So the popup's banner area and the routine's finish screen
   // grow a Restart control that appears only when the folder's manifest.json
   // version stops matching the loaded one (ADR-024).
-  version: '6.9.8',
+  // 6.9.9: bounded search recovery, final credited-progress retries, and normal
+  // selected browser tabs throughout. Existing permissions are unchanged.
+  version: '6.9.9',
   description:
     'Automatically perform Bing searches with realistic typing and dynamic intervals, and open daily sets on the Rewards dashboard.',
   // "downloads" is the one permission the fifth build adds (6.3.2): the

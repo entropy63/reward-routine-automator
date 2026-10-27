@@ -29,7 +29,7 @@ import type { Settings } from '../shared/settings.ts'
 import { cancelBeats, SEARCH_ALARM } from './core/alarms.ts'
 import { recordOpenedTab, clearAllTabs } from './core/tabs.ts'
 import { setLastTabAction } from './core/log.ts'
-import { tick, startSearchBatch } from './routine/search.ts'
+import { tick, startSearchBatch, resumeSearchBatch } from './routine/search.ts'
 import { ensureProwlScheduled, prowlFire, PROWL_ALARM } from './routine/prowl.ts'
 import {
   ensureScheduledRun,
@@ -40,7 +40,9 @@ import {
 import {
   runStartupSequence,
   answerRoutineConfirm,
-  routineConfirmWindowRemoved,
+  routineConfirmTabRemoved,
+  resumeRoutineRecovery,
+  ROUTINE_RECOVERY_ALARM,
   routineSummaryQuery,
   routineSkippedQuery,
 } from './routine/routine.ts'
@@ -113,7 +115,10 @@ chrome.storage.onChanged.addListener((changes, area) => {
 // restock watcher (Phase 2) will ride the same event with its own alarm name.
 chrome.alarms.onAlarm.addListener((alarm) => {
   if (alarm.name === SEARCH_ALARM) {
-    tick()
+    tick().catch((e) => console.warn('Search watchdog failed:', e))
+  }
+  if (alarm.name === ROUTINE_RECOVERY_ALARM) {
+    resumeRoutineRecovery().catch((e) => console.warn('Routine recovery failed:', e))
   }
   if (alarm.name === PROWL_ALARM) {
     prowlFire().catch((e) => console.warn('Prowl failed:', e))
@@ -142,9 +147,12 @@ chrome.tabs.onCreated.addListener((tab) => {
 // through handleMessage below; this is the other way the prompt can end.
 // Guarded like the prompt itself — a Chrome without the windows API must still
 // run.
-if (chrome.windows && chrome.windows.onRemoved) {
-  chrome.windows.onRemoved.addListener(routineConfirmWindowRemoved)
-}
+chrome.tabs.onRemoved.addListener(routineConfirmTabRemoved)
+
+// Persisted work can outlive a worker. Re-arm its watchdog on any wake,
+// including when an alarm was lost across a full browser restart.
+resumeSearchBatch().catch((e) => console.warn('Search resume failed:', e))
+resumeRoutineRecovery().catch((e) => console.warn('Routine resume failed:', e))
 
 // ---------- Message routing ----------
 //
@@ -253,6 +261,7 @@ async function handleMessage(message: Message): Promise<MessageResponse> {
       // tabs stay open, and lastRoutineDay is never written by a stop.
       cancelBeats()
       await stopAllActivity()
+      await chrome.alarms.clear(ROUTINE_RECOVERY_ALARM)
       return { ok: true }
     case 'OPEN_ROUTINE_DONE': {
       // Developer Option: the popup's finish-screen opener — the same
