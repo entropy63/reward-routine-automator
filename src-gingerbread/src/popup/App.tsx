@@ -19,12 +19,12 @@ import { Run } from './views/Run.tsx'
 import { Activity } from './views/Activity.tsx'
 import { Redeem } from './views/Redeem.tsx'
 import { Settings } from './views/Settings.tsx'
+import { BrandMark } from './components/BrandMark.tsx'
 import {
   ActivityIcon,
   BackIcon,
   BellIcon,
   CheckCircleIcon,
-  CometMark,
   FlaskIcon,
   GearIcon,
   GiftIcon,
@@ -128,9 +128,7 @@ export function App() {
               <BackIcon />
             </button>
           ) : (
-            // The extension's own comet mark beside the title — matches the
-            // toolbar icon (see icons.tsx), not a blank gradient square.
-            <CometMark className="brand-glyph" />
+            <BrandMark className="brand-glyph" />
           )}
           {/* The bar shows just the codename (user request, 2026-09-26: "the
            * name that shows in the extension popup should be the code name") —

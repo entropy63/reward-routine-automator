@@ -58,24 +58,6 @@ export const GearIcon = (p: IconProps) => (
   </svg>
 )
 
-// The extension's own mark — the same cyan comet tile the toolbar icon shows
-// (scripts/make-icons-gingerbread.js, kept in sync by hand): an outlined rounded tile
-// with a comet head dashing right and three speed lines. Unlike the icons
-// above it paints its own colors (it's a brand, not a currentColor glyph), so
-// the topbar shows the extension itself beside the title instead of a blank
-// gradient square.
-export function CometMark({ size = 22, className }: { size?: number; className?: string }) {
-  return (
-    <svg width={size} height={size} viewBox="0 0 24 24" className={className} aria-hidden="true">
-      <rect x="1.1" y="1.1" width="21.8" height="21.8" rx="5.5" fill="#06b6d4" stroke="#0e7490" strokeWidth="1.7" />
-      <circle cx="16" cy="12" r="3.6" fill="#ffffff" />
-      <rect x="6" y="7.1" width="6.5" height="2.4" rx="1.2" fill="#ffffff" />
-      <rect x="2.6" y="10.8" width="9.5" height="2.4" rx="1.2" fill="#ffffff" />
-      <rect x="6" y="14.5" width="6.5" height="2.4" rx="1.2" fill="#ffffff" />
-    </svg>
-  )
-}
-
 export const CloseIcon = (p: IconProps) => (
   <svg {...base(p)}>
     <path d="M6 6l12 12M18 6 6 18" />

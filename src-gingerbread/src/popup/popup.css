@@ -45,10 +45,7 @@
   flex: 0 0 auto;
   width: 22px;
   height: 22px;
-  /* The mark itself is painted by the CometMark svg (the extension's own
-   * comet tile, matching the toolbar icon) — this class just sizes it and
-   * keeps the topbar's glow. */
-  filter: drop-shadow(0 3px 12px color-mix(in srgb, var(--accent) 55%, transparent));
+  display: block;
 }
 .brand-title {
   font-weight: 650;
