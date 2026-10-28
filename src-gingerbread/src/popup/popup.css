@@ -1038,3 +1038,26 @@
     animation: none !important;
   }
 }
+
+/* Data tools use the same compact fields and semantic colors as Settings. */
+.storage-gate { width: min(440px, 100vw); min-height: 240px; box-sizing: border-box; padding: 24px; margin: 0 auto; color: var(--text); background: var(--bg); font: var(--font); }
+.storage-gate h1 { font-size: 16px; margin: 0 0 8px; }
+.storage-gate p, .view-loading { font-size: 12px; color: var(--text-dim); line-height: 1.6; }
+.view-loading { padding: 24px; }
+.backup-actions { display: flex; gap: 8px; flex-wrap: wrap; margin: 12px 0; }
+.backup-check { display: flex; align-items: flex-start; gap: 8px; font-size: 12px; color: var(--text-dim); margin: 12px 0; line-height: 1.5; }
+.backup-check input, .backup-mode input { accent-color: var(--accent); margin-top: 2px; flex-shrink: 0; }
+.backup-file { display: none; }
+.backup-preview { border-top: 1px solid var(--line-soft); padding-top: 12px; margin-top: 12px; }
+.backup-preview h3 { font-size: 13px; margin: 0 0 8px; color: var(--text); }
+.backup-preview ul { padding-left: 18px; font-size: 12px; line-height: 1.7; color: var(--text-dim); }
+.backup-mode { border: 1px solid var(--line-soft); border-radius: var(--r-sm); padding: 12px; font-size: 12px; color: var(--text-dim); }
+.backup-mode legend { color: var(--text); padding: 0 4px; }
+.backup-mode label { display: flex; align-items: flex-start; gap: 8px; margin: 6px 0; line-height: 1.5; }
+.backup-message, .backup-error { font-size: 12px; line-height: 1.6; margin: 12px 0 0; }
+.backup-message { color: var(--ok); }
+.backup-error { color: var(--bad); }
+.backup-recovery { margin-top: 8px; }
+.backup-diagnostics-note { margin-top: 12px; }
+.backup-time { min-width: 0; max-width: 108px; background: var(--surface-2); color: var(--text); border: 1px solid var(--line); border-radius: var(--r-sm); padding: 4px; font: inherit; }
+@media (max-width: 380px) { .backup-time { max-width: 96px; } }

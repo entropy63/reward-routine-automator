@@ -10,7 +10,7 @@
 // board. A reload BEFORE Done re-reads the query and shows the overlay again
 // — the summary survives until the user has actually acknowledged it.
 
-import { useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { sendMessage } from '../../shared/messages.ts'
 import { STEP_LABEL } from '../../shared/settings.ts'
 import type { BackgroundStyle, StepId } from '../../shared/settings.ts'
@@ -27,6 +27,8 @@ const STREAK_LABEL: Record<string, string> = {
   dailySet: 'Daily set',
   bingApp: 'Bing app check-in',
   visualSearch: 'Image search',
+  claim: 'Claim points',
+  keepEarning: 'Keep earning',
 }
 
 export type FinishPair = { key: string; value: string }
@@ -83,8 +85,16 @@ export function FinishOverlay({
   const [closing, setClosing] = useState(false)
   const pending = usePendingUpdate()
   const allDone = summary.todo.length === 0
+  const dialog = useRef<HTMLDivElement>(null)
+  const doneButton = useRef<HTMLButtonElement>(null)
+  const closingTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
+  useEffect(() => {
+    doneButton.current?.focus()
+    return () => { if (closingTimer.current !== null) clearTimeout(closingTimer.current) }
+  }, [])
 
   const done = () => {
+    if (closingTimer.current !== null || closing) return
     // Still mode (animations off, low power, reduced motion) skips the
     // transition and the wait together.
     if (!animate) {
@@ -92,20 +102,31 @@ export function FinishOverlay({
       return
     }
     setClosing(true)
-    setTimeout(onClose, BLUR_OUT_MS)
+    closingTimer.current = setTimeout(onClose, BLUR_OUT_MS)
   }
 
   return (
     <div
+      ref={dialog}
       className={`finish-overlay${closing ? ' finish-overlay--closing' : ''}${animate ? '' : ' finish-overlay--still'}`}
       role="dialog"
-      aria-label="Daily routine complete"
+      aria-modal="true"
+      aria-labelledby="finish-heading"
+      onKeyDown={(event) => {
+        if (event.key === 'Escape') { event.preventDefault(); done(); return }
+        if (event.key !== 'Tab') return
+        const controls = Array.from(dialog.current?.querySelectorAll<HTMLButtonElement>('button:not(:disabled)') || [])
+        const first = controls[0]
+        const last = controls.at(-1)
+        if (event.shiftKey && document.activeElement === first) { event.preventDefault(); last?.focus() }
+        else if (!event.shiftKey && document.activeElement === last) { event.preventDefault(); first?.focus() }
+      }}
     >
       <Background style={background} animate={animate} />
       <div className="finish-card">
         <Confetti fire={animate} />
         {summary.dev && <div className="finish-dev">Preview · dev</div>}
-        <h1 className="finish-title">Daily routine complete</h1>
+        <h1 id="finish-heading" className="finish-title">Daily routine complete</h1>
         <p className="finish-sub">
           Reward Routine Automator finished its run.{' '}
           {allDone
@@ -168,7 +189,7 @@ export function FinishOverlay({
               Restart
             </button>
           )}
-          <button className="btn btn--primary finish-done" onClick={done}>
+          <button ref={doneButton} className="btn btn--primary finish-done" onClick={done}>
             Done
           </button>
         </div>

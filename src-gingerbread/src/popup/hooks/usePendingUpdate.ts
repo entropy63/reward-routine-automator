@@ -30,7 +30,7 @@ export function usePendingUpdate(): string | null {
     const loaded = chrome.runtime.getManifest().version
 
     const check = async () => {
-      if (!alive || checking) return
+      if (!alive || checking || document.visibilityState === 'hidden') return
       checking = true
       try {
         const res = await fetch(chrome.runtime.getURL('manifest.json'), { cache: 'no-store' })
@@ -48,11 +48,13 @@ export function usePendingUpdate(): string | null {
     void check()
     const timer = window.setInterval(check, 30_000)
     window.addEventListener('focus', check)
+    document.addEventListener('visibilitychange', check)
 
     return () => {
       alive = false
       window.clearInterval(timer)
       window.removeEventListener('focus', check)
+      document.removeEventListener('visibilitychange', check)
     }
   }, [])
 

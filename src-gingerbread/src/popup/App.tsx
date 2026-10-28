@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react'
+import { lazy, Suspense, useEffect, useRef, useState } from 'react'
 import type { ComponentType, SVGProps } from 'react'
 import { AnimatePresence } from 'framer-motion'
 import { getSettings, DEFAULT_SETTINGS } from '../shared/settings.ts'
@@ -16,10 +16,9 @@ import { Background } from './fx/Background.tsx'
 import { Banners } from './components/Banners.tsx'
 import { Today } from './views/Today.tsx'
 import { Run } from './views/Run.tsx'
-import { Activity } from './views/Activity.tsx'
-import { Redeem } from './views/Redeem.tsx'
-import { Settings } from './views/Settings.tsx'
 import { BrandMark } from './components/BrandMark.tsx'
+import { StorageGate } from './components/StorageGate.tsx'
+import { ViewBoundary } from './components/ViewBoundary.tsx'
 import {
   ActivityIcon,
   BackIcon,
@@ -36,6 +35,9 @@ import {
 } from './components/icons.tsx'
 
 type Tab = 'today' | 'runNow' | 'redeem' | 'activity'
+const Settings = lazy(() => import('./views/Settings.tsx').then((module) => ({ default: module.Settings })))
+const Redeem = lazy(() => import('./views/Redeem.tsx').then((module) => ({ default: module.Redeem })))
+const Activity = lazy(() => import('./views/Activity.tsx').then((module) => ({ default: module.Activity })))
 
 const TABS: { id: Tab; label: string; Icon: ComponentType<SVGProps<SVGSVGElement>> }[] = [
   { id: 'today', label: 'Today', Icon: HomeIcon },
@@ -47,6 +49,7 @@ const TABS: { id: Tab; label: string; Icon: ComponentType<SVGProps<SVGSVGElement
 // The status pill's read of "what's running now", from the same run-state doc
 // the Activity view uses.
 function statusOf(rs: RunState): { label: string; live: boolean } {
+  if (rs.pause) return { label: rs.pause.effectiveAt ? 'Paused' : 'Pausing…', live: true }
   if (rs.batch) return { label: `Searching · ${rs.batch.remaining}`, live: true }
   if (rs.routine) return { label: 'Routine', live: true }
   if (rs.activity) return { label: rs.activity.label, live: true }
@@ -54,7 +57,7 @@ function statusOf(rs: RunState): { label: string; live: boolean } {
 }
 
 export function App() {
-  const { settings, save, loaded } = useSettings()
+  const { settings, save, loaded, error, retry } = useSettings()
   const runState = useRunState()
   const stats = useStats()
   const history = usePointsHistory()
@@ -84,7 +87,7 @@ export function App() {
     firedRef.current = true
     getSettings().then((s) => {
       if (s.refreshStatsOnPopupOpen) sendMessage({ type: 'REFRESH_STATS' })
-    })
+    }).catch(() => {})
   }, [])
 
   const status = statusOf(runState)
@@ -107,7 +110,7 @@ export function App() {
   // alpha now tracks the blur knob, so a default-blur frame looked
   // near-transparent before the user's blur loaded — plus theme/appearance/
   // frame-height jumps). storage.sync answers in tens of ms warm.
-  if (!loaded) return null
+  if (!loaded) return <StorageGate error={error} retry={retry} />
 
   return (
     <div className="app" style={{ height }}>
@@ -226,6 +229,7 @@ export function App() {
          * single-line styling keeps the tabbar visible): the Bing-app warning,
          * a restock, a newly sold-out amount. src-donut parity — not dismissible. */}
         {!settingsOpen && <Banners stats={stats} preview={bannerPreview} />}
+        <ViewBoundary><Suspense fallback={<div className="view-loading" role="status">Opening view…</div>}>
         <AnimatePresence mode="wait">
           {settingsOpen ? (
             <Settings key="settings" settings={settings} save={save} motionOn={motionOn} />
@@ -239,6 +243,7 @@ export function App() {
             <Activity key="activity" runState={runState} />
           )}
         </AnimatePresence>
+        </Suspense></ViewBoundary>
       </main>
 
       {!settingsOpen && (

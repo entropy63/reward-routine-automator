@@ -11,6 +11,9 @@ function harness() {
   let cleanup: () => void = () => {}
   let focus: (() => Promise<void>) | null = null
   let poll: (() => Promise<void>) | null = null
+  let visibility: (() => Promise<void>) | null = null
+  let hidden = false
+  let requests = 0
   const context = createContext({
     useState: () => [null, (value: string | null) => { pending = value }],
     useEffect: (effect: () => () => void) => { cleanup = effect() },
@@ -19,9 +22,15 @@ function harness() {
       getURL: (file: string) => `chrome-extension://fixture/${file}`,
     } },
     fetch: async (_url: string, options: RequestInit) => {
+      requests++
       assert.equal(options.cache, 'no-store')
       if (fail) throw new Error('replacement in progress')
       return { ok: true, json: async () => ({ version: disk }) }
+    },
+    document: {
+      get visibilityState() { return hidden ? 'hidden' : 'visible' },
+      addEventListener: (_event: string, fn: () => Promise<void>) => { visibility = fn },
+      removeEventListener: () => { visibility = null },
     },
     window: {
       setInterval: (fn: () => Promise<void>, ms: number) => {
@@ -42,8 +51,10 @@ function harness() {
     fail: (value: boolean) => { fail = value },
     focus: async () => { await focus?.() },
     poll: async () => { await poll?.() },
+    visible: async (value: boolean) => { hidden = !value; await visibility?.() },
+    requests: () => requests,
     cleanup: () => cleanup(),
-    watching: () => !!focus || !!poll,
+    watching: () => !!focus || !!poll || !!visibility,
   }
 }
 
@@ -58,6 +69,23 @@ test('an already-open dashboard discovers an update on focus and clears a matchi
   await h.poll()
   assert.equal(h.pending(), null)
   h.cleanup()
+})
+
+test('a hidden dashboard skips polling and checks immediately on return', async () => {
+  const h = harness()
+  await h.flush()
+  const before = h.requests()
+  await h.visible(false)
+  h.disk('6.9.9')
+  await h.poll()
+  await h.focus()
+  assert.equal(h.requests(), before)
+  assert.equal(h.pending(), null)
+  await h.visible(true)
+  assert.equal(h.requests(), before + 1)
+  assert.equal(h.pending(), '6.9.9')
+  h.cleanup()
+  assert.equal(h.watching(), false)
 })
 
 test('periodic checks recover from temporary read errors and stop on unmount', async () => {
