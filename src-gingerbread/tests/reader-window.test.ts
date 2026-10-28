@@ -25,7 +25,7 @@ function harness(opts: { stopDuringLoad?: boolean; stopDuringRead?: boolean; def
   const couponsRead = () => {}
   const rowsRead = () => {}
   const detailRead = () => {}
-  const pageStats = (mode: string) => mode === 'cards'
+  const pageStats = (mode: string) => mode === 'cards' || mode === 'search'
     ? { availablePoints: '1,000', searchPoints: '57/60' }
     : { activities: { bingSearch: '57/60', dailySet: '1/1', bingApp: '0/1', visualSearch: '1/1' } }
   const context = createContext({
@@ -109,7 +109,9 @@ function harness(opts: { stopDuringLoad?: boolean; stopDuringRead?: boolean; def
     advance: (ms: number) => { now += ms },
     statsGuard: () => runInContext('READ_RUN_GUARDS.stats', context),
     release: () => { assert.ok(releaseDashboard); releaseDashboard() },
-    stats: async () => { await runInContext('refreshStats()', context) },
+    stats: async (request: any = {}) => runInContext(`refreshStats(${JSON.stringify(request)})`, context),
+    now: () => now,
+    stop: () => { epoch++ },
     orders: async () => { await runInContext('syncOrders()', context) },
     orphan: async () => { await runInContext('closeOrphanedOrdersWindow()', context) },
   }
@@ -127,6 +129,74 @@ test('stats selects normal-window tabs sequentially without creating/focusing a 
   for (const tab of h.created) { assert.equal(tab.windowId, 42); assert.equal(tab.active, true) }
   assert.deepEqual(h.closed, [[10, 11]])
   assert.equal(h.saved.lastStats.searchPoints, '57/60')
+})
+
+test('concurrent compatible stats requests await one reader and share its evidence', async () => {
+  const h = harness({ deferDashboard: true })
+  const first = h.stats()
+  await new Promise(resolve => setImmediate(resolve))
+  let secondDone = false
+  const second = h.stats().then(value => { secondDone = true; return value })
+  await new Promise(resolve => setImmediate(resolve))
+  assert.equal(secondDone, false)
+  assert.equal(h.created.length, 1)
+  h.release()
+  const [one, two] = await Promise.all([first, second])
+  assert.equal(one, two)
+  assert.equal(two.stats.searchPoints, '57/60')
+  assert.equal(h.created.length, 2)
+})
+
+test('post-action stats cannot be satisfied by an older in-flight read', async () => {
+  const h = harness({ deferDashboard: true })
+  const first = h.stats()
+  await new Promise(resolve => setImmediate(resolve))
+  h.advance(100)
+  const boundary = h.now()
+  const second = h.stats({ notBefore: boundary })
+  h.release()
+  await first
+  await new Promise(resolve => setImmediate(resolve))
+  assert.equal(h.created.length, 3, 'new dashboard read begins after the older read finishes')
+  h.release()
+  const evidence = await second
+  assert.equal(h.created.length, 4)
+  assert.ok(evidence.startedAt >= boundary)
+})
+
+test('search-only read skips Earn/coupons and does not freshen unrelated activity data', async () => {
+  const h = harness()
+  h.saved.lastStats = { at: 5, activities: { dailySet: '0/1' }, readyToClaim: '50' }
+  const evidence = await h.stats({ scope: 'search' })
+  assert.equal(h.created.length, 1)
+  assert.deepEqual(h.calls, ['create', 'read:search'])
+  assert.equal(h.saved.lastCoupons, undefined)
+  assert.equal(h.saved.lastStats.at, 5)
+  assert.equal(h.saved.lastStats.activities.dailySet, '0/1')
+  assert.equal(evidence.stats.searchPoints, '57/60')
+  assert.ok(evidence.stats.at > 5)
+})
+
+test('explicit recent-evidence reuse avoids a new compatible page load', async () => {
+  const h = harness()
+  const first = await h.stats()
+  h.advance(500)
+  const second = await h.stats({ scope: 'search', maxAgeMs: 1000 })
+  assert.equal(first, second)
+  assert.equal(h.created.length, 2)
+  h.advance(1000)
+  await h.stats({ scope: 'search', maxAgeMs: 1000 })
+  assert.equal(h.created.length, 3)
+})
+
+test('concurrent cache requests after Stop reserve only one new reader', async () => {
+  const h = harness()
+  await h.stats()
+  h.stop()
+  const [one, two] = await Promise.all([h.stats({ maxAgeMs: 1000 }), h.stats({ maxAgeMs: 1000 })])
+  assert.equal(one, two)
+  assert.equal(one.stopEpoch, 2)
+  assert.equal(h.created.length, 4)
 })
 
 test('Stop during a stats page load prevents reading and leaves its owned tab open', async () => {

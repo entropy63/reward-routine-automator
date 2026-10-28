@@ -23,9 +23,10 @@ import { createNormalTab } from '../core/normal-tabs.ts'
 import { withDeadline } from '../pure/search-recovery.ts'
 import { holdKeepAlive, releaseKeepAlive } from '../core/keepalive.ts'
 import { setLastStatsLog } from '../core/log.ts'
+import { recordRunEvent } from '../core/run-history.ts'
 import { getSettings } from '../../shared/settings.ts'
 import { KEYS, getLocal, setLocal } from '../../shared/storage.ts'
-import type { HistoryEntry, RawStats } from '../../shared/storage.ts'
+import type { HistoryEntry, RawStats, Stats } from '../../shared/storage.ts'
 import { mergeStats } from '../pure/merge-stats.ts'
 import { parsePoints, recordDay } from '../pure/history.ts'
 import { readRewardsStats } from '../injections/stats-read.ts'
@@ -64,12 +65,81 @@ interface PageRead {
   stats: RawStats | null
 }
 
-export async function refreshStats(): Promise<void> {
-  if (READ_RUN_GUARDS.stats) {
-    console.log('Stats: a read is already running; skipping.')
-    return
+export interface StatsReadRequest {
+  scope?: 'full' | 'search'
+  /** The read must have begun after the action being verified. */
+  notBefore?: number
+  minStartedAt?: number
+  /** Reuse only explicitly requested, recent evidence; default is a fresh read. */
+  maxAgeMs?: number
+}
+
+export interface StatsReadResult {
+  scope: 'full' | 'search'
+  startedAt: number
+  completedAt: number
+  stats: Stats | null
+  observed: string[]
+  stopEpoch: number | null
+}
+
+let statsInFlight: { scope: 'full' | 'search'; promise: Promise<StatsReadResult> } | null = null
+let lastEvidence: StatsReadResult | null = null
+let evidenceRevision = 0
+
+export function invalidateStatsEvidence(): void { lastEvidence = null; evidenceRevision++ }
+
+function observedFields(stats: Stats | null): string[] {
+  if (!stats) return []
+  return Object.entries(stats).flatMap(([key, value]) => key === 'at' || value == null ? []
+    : key === 'activities' ? Object.entries(value).filter(([, v]) => v != null).map(([k]) => 'activities.' + k)
+      : [key])
+}
+
+// Share the actual result, not a boolean guard. A caller checking work performed
+// after an older reader began waits for that reader, then starts a new one.
+export async function refreshStats(request: StatsReadRequest = {}): Promise<StatsReadResult> {
+  // Resolve the request's owner before inspecting/reserving the shared reader.
+  // There are no awaits between the acquisition check and setting statsInFlight.
+  const requestEpoch = await currentStopEpoch()
+  const scope = request.scope || 'full'
+  const minimum = Math.max(0, Number(request.notBefore || request.minStartedAt) || 0)
+  const maxAge = Math.max(0, Number(request.maxAgeMs) || 0)
+  const accepts = (result: StatsReadResult) => (result.scope === 'full' || scope === 'search') &&
+    result.startedAt >= minimum && (scope !== 'search' || result.observed.includes('searchPoints'))
+  if (statsInFlight) {
+    const result = await statsInFlight.promise
+    if (result.stopEpoch === requestEpoch && accepts(result)) return result
+    if (requestEpoch !== await currentStopEpoch()) return { ...result, stats: null, observed: [] }
+    return refreshStats(request)
   }
+  if (maxAge && lastEvidence && accepts(lastEvidence) && Date.now() - lastEvidence.startedAt <= maxAge &&
+      lastEvidence.stopEpoch === requestEpoch) return lastEvidence
+
+  const startedAt = Date.now()
+  const revision = evidenceRevision
+  let stats: Stats | null = null
+  const pending = collectStats(scope, (value, epoch) => { if (epoch === requestEpoch) stats = value })
+    .then(async (): Promise<StatsReadResult> => {
+      if (requestEpoch !== await currentStopEpoch()) stats = null
+      return { scope, startedAt, completedAt: Date.now(), stats,
+        observed: observedFields(stats), stopEpoch: requestEpoch }
+    })
+  statsInFlight = { scope, promise: pending }
+  try {
+    const result = await pending
+    if (result.stats && revision === evidenceRevision) lastEvidence = result
+    return result
+  } finally {
+    if (statsInFlight?.promise === pending) statsInFlight = null
+  }
+}
+
+async function collectStats(scope: 'full' | 'search', publish: (stats: Stats, epoch: number | null) => void): Promise<void> {
   READ_RUN_GUARDS.stats = true
+  const startedAt = Date.now()
+  let historyId: string | undefined
+  let readFound = false
   const readDeadline = Date.now() + STATS_RUN_BUDGET_MS
   const expired = (): boolean => Date.now() >= readDeadline
   const availableMs = (maximum: number): number => {
@@ -254,19 +324,23 @@ export async function refreshStats(): Promise<void> {
 
   try {
     myEpoch = await withDeadline(beginActivity('Stats'), availableMs(5000), 'Stats start')
+    historyId = (await getLocal<{ routine?: { historyId?: string } }>(KEYS.runState).catch(() => undefined))?.routine?.historyId
     // Read selected tabs in sequence: two parallel readers would immediately
     // hide each other's page and reproduce the hydration stall. A tab selection
     // never calls windows.update({ focused: true }) or creates a taskbar window.
-    const dashboardRead = await readPage(REWARDS_DASHBOARD, 'cards', 'dashboard')
+    const dashboardRead = await readPage(REWARDS_DASHBOARD, scope === 'search' ? 'search' : 'cards', 'dashboard')
     if (await unavailable()) return
-    const earnRead = await readPage(REWARDS_EARN, 'streaks', 'Earn')
+    // A search decision only needs the points flyout. Earn remains a fallback
+    // when the dashboard did not answer, and a full read still visits both.
+    const earnRead = scope === 'full' || dashboardRead?.stats?.searchPoints == null
+      ? await readPage(REWARDS_EARN, scope === 'search' ? 'search' : 'streaks', 'Earn') : null
     if (await unavailable()) return
 
     // The coupon trigger ("Coupon (N)") lives on the dashboard tab this read
     // has already waited out, so its own poll only needs to cover the
     // trigger's late render — not a full hydration. A null result (nothing
     // recognized) keeps the last good count.
-    try {
+    if (scope === 'full' && dashboardRead) try {
       const [couponInjection] = await executeStatsScript({
         target: { tabId: dashboardRead!.tabId },
         func: readCouponCount,
@@ -292,9 +366,9 @@ export async function refreshStats(): Promise<void> {
     const problems: string[] = []
     const dumps: string[] = []
     if (dashboardStats == null) problems.push('the dashboard page did not answer')
-    if (earnStats == null) problems.push('the Earn page did not answer')
+    if (scope === 'full' && earnStats == null) problems.push('the Earn page did not answer')
 
-    if (earnRead && Object.values((earnStats && earnStats.activities) || {}).every((v) => v == null)) {
+    if (scope === 'full' && earnRead && Object.values((earnStats && earnStats.activities) || {}).every((v) => v == null)) {
       const evidence = await dumpEarnEvidence(earnRead.tabId)
       if (evidence) dumps.push(evidence.streaksMarkup || '')
       // Only when the page answered at all — a null read already reported
@@ -341,7 +415,7 @@ export async function refreshStats(): Promise<void> {
     // An all-null merge is two pages that never answered, not a Rewards account
     // with nothing to show — store nothing rather than overwriting the last
     // good stats with empties and a fresh timestamp.
-    const found =
+    const found = scope === 'search' ? merged.searchPoints != null :
       merged.availablePoints != null ||
       merged.readyToClaim != null ||
       merged.dailyStreak != null ||
@@ -351,14 +425,25 @@ export async function refreshStats(): Promise<void> {
 
     if (await unavailable()) return
     if (found) {
-      await saveReadValue(KEYS.lastStats, { ...merged, at: Date.now() })
-      console.log('Stats: read the dashboard and the Earn page.')
+      const collected: Stats = { ...merged, at: Date.now() }
+      if (scope === 'full') {
+        await saveReadValue(KEYS.lastStats, collected)
+      } else {
+        // Updating one field must not give stale activity/claim evidence a new
+        // account-wide timestamp. Search callers receive fresh narrow evidence
+        // directly; full-routine verdicts still require a full read.
+        const previous = await withDeadline(getLocal<Stats>(KEYS.lastStats), availableMs(5000), 'Stats previous snapshot')
+        await saveReadValue(KEYS.lastStats, { ...(previous || { ...merged, at: 0 }), searchPoints: merged.searchPoints })
+      }
+      publish(collected, myEpoch)
+      readFound = true
+      console.log(scope === 'full' ? 'Stats: read the dashboard and the Earn page.' : 'Stats: read search progress.')
 
       // The points history (ADR-020): one balance snapshot per local day — the
       // day's first and its latest — so the popup can show earned-today and a
       // trend line. Pure math in pure/history; this is the only write. A read
       // without a balance records nothing, keeping the last good snapshot.
-      const points = parsePoints(merged.availablePoints)
+      const points = scope === 'full' ? parsePoints(merged.availablePoints) : null
       if (points != null) {
         const history = await withDeadline(getLocal<HistoryEntry[]>(KEYS.pointsHistory), availableMs(5000), 'Stats history')
         if (!(await unavailable())) {
@@ -402,6 +487,8 @@ export async function refreshStats(): Promise<void> {
       await withDeadline(endActivity('Stats'), 2000, 'Stats activity cleanup').catch((e) => console.warn('Stats: activity cleanup failed:', e))
       releaseKeepAlive()
       READ_RUN_GUARDS.stats = false
+      if (historyId) await recordRunEvent(historyId, 'stats/' + scope, readFound ? 'observed' : 'unknown',
+        scope === 'full' ? 'Full account read' : 'Search-progress read', Date.now() - startedAt).catch(console.warn)
     }
   }
 }

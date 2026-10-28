@@ -3,7 +3,7 @@
 // (core/run-state.ts); the verdicts are pure (pure/verdicts.ts) and this
 // module is their driver — it performs the effects the verdicts describe.
 
-import { readRunState, updateRunState, currentStopEpoch, isStaleBatch } from '../core/run-state.ts'
+import { readRunState, updateRunState, currentStopEpoch, isStaleBatch, pauseBoundary, reserveRecoveryActions } from '../core/run-state.ts'
 import { getSettings } from '../../shared/settings.ts'
 import { startKeepAlive, holdKeepAlive, releaseKeepAlive } from '../core/keepalive.ts'
 import { scheduleBeat, cancelBeats } from '../core/alarms.ts'
@@ -17,12 +17,13 @@ import {
   closeCapturedTabs,
 } from '../core/tabs.ts'
 import { setLastTabAction } from '../core/log.ts'
+import { recordRunEvent } from '../core/run-history.ts'
 import { rightSizedCount, judgeSettlement, progressPair, POINTS_PER_SEARCH } from '../pure/verdicts.ts'
 import type { SizedBatch } from '../pure/verdicts.ts'
 import { tickShouldRun } from '../pure/tick-guard.ts'
 import { withDeadline, SEARCH_MAX_ATTEMPTS, SEARCH_ATTEMPT_MS, SEARCH_PAGE_LEASE_MS, nextSearchRunId } from '../pure/search-recovery.ts'
 import { createNormalTab } from '../core/normal-tabs.ts'
-import { awaitedQuery, startQueryPrefetch } from '../queries/chain.ts'
+import { awaitedQuery, startQueryPrefetch, recordSubmittedQuery } from '../queries/chain.ts'
 import { performHumanTypedSearchOnBing } from '../injections/typed-search.ts'
 import { KEYS, getLocal, setLocal } from '../../shared/storage.ts'
 import type { Stats } from '../../shared/storage.ts'
@@ -57,6 +58,7 @@ async function startBatch(opts: { count?: number; prowl?: boolean; continuation?
   const running = await readRunState()
   if (finishingBatch && !opts.continuation) return
   if (running.batch && !opts.continuation) return
+  if (await pauseBoundary()) return
   cancelBeats()
 
   // Stop checkpoint, covering both callers: a stop landing between the
@@ -81,16 +83,23 @@ async function startBatch(opts: { count?: number; prowl?: boolean; continuation?
 
   let sized: SizedBatch = { count: perBatch, pair: null, trimmed: false }
   if (settings.rightSizeSearchBatch) {
+    let freshStats: Stats | null = null
     if (!continuingRun) {
-      await withDeadline(refreshStats(), 90000, 'Pre-search stats read')
+      const read = await withDeadline(refreshStats({ scope: 'search', notBefore: Date.now() }), 90000, 'Pre-search stats read')
+      freshStats = read.stats
       // A stop during the read must not go on to open a batch.
       if ((await currentStopEpoch()) !== myEpoch) {
         console.log('Search batch: stopped during the pre-batch read.')
         return
       }
+    } else {
+      // This continuation's pair came from its immediately preceding read.
+      // Preserve that collection time instead of relabeling an older full
+      // account snapshot as fresh merely to size the next batch.
+      freshStats = { ...(await getLocal<Stats>(KEYS.lastStats)),
+        at: continuingRun.freshAt, searchPoints: continuingRun.pair.join('/') } as Stats
     }
-    const stats = await getLocal<Stats>(KEYS.lastStats)
-    sized = rightSizedCount(stats, perBatch)
+    sized = rightSizedCount(freshStats, perBatch)
   }
 
   const { count: batchCount, pair, trimmed } = sized
@@ -190,11 +199,13 @@ async function failSearchAttempt(runId: number, attemptId: number, reason: strin
   let accepted = false
   let prowl = false
   let tabId: number | null = null
+  let historyId: string | undefined
   const epoch = await currentStopEpoch()
   await updateRunState((state) => {
     const batch = state.batch
     if (!batch || batch.runId !== runId || batch.attemptId !== attemptId) return
     accepted = true
+    historyId = state.routine?.historyId
     batch.retryCount = (batch.retryCount || 0) + 1
     batch.attemptStartedAt = 0
     batch.nextRunAt = Date.now() + 5000
@@ -206,6 +217,18 @@ async function failSearchAttempt(runId: number, attemptId: number, reason: strin
     }
   })
   if (!accepted) return
+  if (historyId) await recordRunEvent(historyId, 'search', 'retry', reason).catch(console.warn)
+  if (!exhausted && !(await reserveRecoveryActions())) {
+    exhausted = true
+    reason = 'routine recovery budget reached'
+    await updateRunState(state => {
+      if (state.batch?.runId === runId) {
+        state.batch.retryCount = SEARCH_MAX_ATTEMPTS
+        state.rightSizeRun = null
+      }
+    })
+  }
+  if (!exhausted && await pauseBoundary()) { cancelBeats(); return }
   // Replace an unusable page with Bing's home page before retrying. This also
   // destroys any old page timers if executeScript rejected mid-navigation.
   if (!exhausted && tabId != null && !(await isStaleBatch(runId))) {
@@ -242,6 +265,7 @@ export async function tick(): Promise<void> {
     const state = await readRunState()
     const batch = state.batch
     if (!batch) { cancelBeats(); return }
+    if (!batch.attemptStartedAt && await pauseBoundary()) { cancelBeats(); return }
     runId = batch.runId
     if (batch.remaining <= 0) { await finishBatch(batch.prowl === true, runId); return }
     if ((batch.retryCount || 0) >= SEARCH_MAX_ATTEMPTS) {
@@ -322,6 +346,7 @@ export async function tick(): Promise<void> {
       if (!injection?.result?.ok) throw new Error(injection?.result?.reason || 'Search input or submission unavailable')
       if (await stale()) throw new Error('stopped')
       await waitForSearchNavigation(tabId!, query)
+      await recordSubmittedQuery(query).catch(error => console.warn('Search history write failed:', error))
       return Number(injection.result.busyMs) || 0
     }
     const busyMs = await withDeadline(perform(), SEARCH_ATTEMPT_MS, 'Search attempt')
@@ -338,6 +363,8 @@ export async function tick(): Promise<void> {
       s.batch.nextRunAt = Date.now() + delay
     })
     if (remaining < 0) return
+    if (state.routine?.historyId) await recordRunEvent(state.routine.historyId, 'search', 'submitted',
+      `Results navigation confirmed; ${remaining} submissions remaining`, Date.now() - attemptStartedAt).catch(console.warn)
     startQueryPrefetch()
     if (remaining === 0) { await finishBatch(batch.prowl === true, runId!); return }
     scheduleBeat(delay, () => { void tick().catch(console.warn) })
@@ -376,10 +403,10 @@ async function settleRightSizedRun(runId: number): Promise<'done' | 'stopped' | 
   await sleep(RIGHT_SIZE_SETTLE_MS)
   if ((await currentStopEpoch()) !== myEpoch || await isStaleBatch(runId)) return 'stopped'
 
-  await withDeadline(refreshStats(), 90000, 'Post-search stats read')
+  const read = await withDeadline(refreshStats({ scope: 'search', notBefore: Date.now() }), 90000, 'Post-search stats read')
   if ((await currentStopEpoch()) !== myEpoch || await isStaleBatch(runId)) return 'stopped'
 
-  const stats = await getLocal<Stats>(KEYS.lastStats)
+  const stats = read.stats
   const nowPair = stats ? progressPair(stats.searchPoints) : null
   // The loop state is consumed here whatever the verdict — the rounds below
   // write their own, and a 'done' leaves the field clear for a later batch.
@@ -390,6 +417,10 @@ async function settleRightSizedRun(runId: number): Promise<'done' | 'stopped' | 
   const decision = judgeSettlement(run, nowPair, RIGHT_SIZE_MAX_ROUNDS, POINTS_PER_SEARCH)
   if (decision.note) await setLastTabAction(decision.note, decision.ok ?? null)
   if (decision.verdict !== 'continue') return 'done'
+  if (!(await reserveRecoveryActions())) {
+    await setLastTabAction('Search verification stopped: routine recovery budget reached', false)
+    return 'done'
+  }
 
   // Short of the cap, but the points moved: run what's still needed. The
   // round-N tabs are dealt with exactly as any finished search step's are

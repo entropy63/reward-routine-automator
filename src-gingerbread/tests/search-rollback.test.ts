@@ -69,7 +69,7 @@ function harness(batchExtras: any = {}, stopAtLoad = false, options: any = {}) {
       return true
     },
     awaitedQuery: async () => { if (options.stopAtQuery) { stored.stopEpoch++; stored.batch = null }; return { query: 'a meaningful query', api: 'fixture' } },
-    setLocal: async () => {}, startKeepAlive: () => {}, startQueryPrefetch: () => {},
+    setLocal: async () => {}, startKeepAlive: () => {}, startQueryPrefetch: () => {}, recordSubmittedQuery: async () => {},
     getSettings: async () => ({ minDelaySec: 5, maxDelaySec: 15, searchesPerBatch: 4, rightSizeSearchBatch: false }),
     randomDelayMillis: () => 5000,
     scheduleBeat: (delay: number) => { delays.push(delay) },
@@ -89,6 +89,8 @@ function harness(batchExtras: any = {}, stopAtLoad = false, options: any = {}) {
     advance: (ms: number) => { time += ms },
     async start() { await runInContext('startSearchBatch()', context); await new Promise(resolve => setImmediate(resolve)) },
     async stop() { await runInContext('stopAllActivity()', context) },
+    async pause() { await runInContext('requestPause()', context) },
+    async unpause() { await runInContext('clearPause()', context) },
     async resume() { await runInContext('resumeSearchBatch()', context) },
     state: () => stored,
     async tick() { await runInContext('tick()', context) },
@@ -127,6 +129,21 @@ test('prowl batches retain typed searches', async () => {
   assert.equal(h.injections.length, 1)
   assert.ok(h.navigations.every(([, patch]) => patch.active === true && !('url' in patch)))
   assert.equal(h.state().batch.prowl, true)
+})
+
+test('pause preserves remaining work at a safe boundary and resume continues it', async () => {
+  const h = harness()
+  await h.pause()
+  await h.tick()
+  assert.equal(h.injections.length, 0)
+  assert.equal(h.state().batch.remaining, 4)
+  assert.ok(h.state().pause.effectiveAt)
+  assert.deepEqual(h.delays, [])
+  await h.unpause()
+  await h.resume()
+  assert.equal(h.injections.length, 1)
+  assert.equal(h.state().batch.remaining, 3)
+  assert.equal(h.state().pause, undefined)
 })
 
 test('stopping while the page loads prevents typing and rescheduling', async () => {

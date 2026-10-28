@@ -5,7 +5,7 @@
 // Each feature records the tabs it opens so it can close them again when it
 // finishes. Daily set is the reason this can't just remember one id: clicking
 // a tile opens further tabs, so anything created while a feature is
-// "capturing" counts as belonging to it. This bookkeeping lives inside the
+// "capturing" is attributed only when its opener already belongs to it. This bookkeeping lives inside the
 // run-state document (captures.capturing / captures.opened) rather than two
 // storage keys of its own — the serialization that made the v1 writes safe is
 // updateRunState's promise chain now, and a stop clears the bookkeeping as
@@ -37,11 +37,19 @@ export interface ClearResult {
 // Wired to chrome.tabs.onCreated in background/index.ts (the listener belongs
 // to the entry point; this is just the bookkeeping). No-ops unless some step
 // is capturing — a tab the user opened by hand is nobody's to close.
-export function recordOpenedTab(tabId: number): Promise<unknown> {
+export async function recordOpenedTab(created: chrome.tabs.Tab | number): Promise<unknown> {
+  // Direct tabs are claimed explicitly by the creator. The event listener is
+  // only for child tabs opened by those pages, never every tab the user opens
+  // during the same time window. Numeric input remains compatible with older
+  // listeners while the entry point moves to passing the full tab object.
+  const tab = typeof created === 'number' ? await chrome.tabs.get(created).catch(() => null) : created
+  if (tab?.id == null || tab.openerTabId == null) return
+  const tabId = tab.id
   return updateRunState((state) => {
     if (!state.captures.capturing.length) return
     for (const stepId of state.captures.capturing) {
       const ids = state.captures.opened[stepId] || []
+      if (!ids.includes(tab.openerTabId!)) continue
       if (!ids.includes(tabId)) state.captures.opened[stepId] = ids.concat(tabId)
     }
   })
