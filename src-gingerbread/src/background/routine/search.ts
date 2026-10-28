@@ -217,7 +217,7 @@ async function failSearchAttempt(runId: number, attemptId: number, reason: strin
     }
   })
   if (!accepted) return
-  if (historyId) await recordRunEvent(historyId, 'search', 'retry', reason).catch(console.warn)
+  if (historyId) await withDeadline(recordRunEvent(historyId, 'search', 'retry', reason), 2000, 'Search retry trace').catch(console.warn)
   if (!exhausted && !(await reserveRecoveryActions())) {
     exhausted = true
     reason = 'routine recovery budget reached'
@@ -346,7 +346,7 @@ export async function tick(): Promise<void> {
       if (!injection?.result?.ok) throw new Error(injection?.result?.reason || 'Search input or submission unavailable')
       if (await stale()) throw new Error('stopped')
       await waitForSearchNavigation(tabId!, query)
-      await recordSubmittedQuery(query).catch(error => console.warn('Search history write failed:', error))
+      await withDeadline(recordSubmittedQuery(query), 2000, 'Query history write').catch(error => console.warn('Search history write failed:', error))
       return Number(injection.result.busyMs) || 0
     }
     const busyMs = await withDeadline(perform(), SEARCH_ATTEMPT_MS, 'Search attempt')
@@ -363,8 +363,8 @@ export async function tick(): Promise<void> {
       s.batch.nextRunAt = Date.now() + delay
     })
     if (remaining < 0) return
-    if (state.routine?.historyId) await recordRunEvent(state.routine.historyId, 'search', 'submitted',
-      `Results navigation confirmed; ${remaining} submissions remaining`, Date.now() - attemptStartedAt).catch(console.warn)
+    if (state.routine?.historyId) await withDeadline(recordRunEvent(state.routine.historyId, 'search', 'submitted',
+      `Results navigation confirmed; ${remaining} submissions remaining`, Date.now() - attemptStartedAt), 2000, 'Search submission trace').catch(console.warn)
     startQueryPrefetch()
     if (remaining === 0) { await finishBatch(batch.prowl === true, runId!); return }
     scheduleBeat(delay, () => { void tick().catch(console.warn) })

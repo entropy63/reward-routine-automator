@@ -487,8 +487,8 @@ async function collectStats(scope: 'full' | 'search', publish: (stats: Stats, ep
       await withDeadline(endActivity('Stats'), 2000, 'Stats activity cleanup').catch((e) => console.warn('Stats: activity cleanup failed:', e))
       releaseKeepAlive()
       READ_RUN_GUARDS.stats = false
-      if (historyId) await recordRunEvent(historyId, 'stats/' + scope, readFound ? 'observed' : 'unknown',
-        scope === 'full' ? 'Full account read' : 'Search-progress read', Date.now() - startedAt).catch(console.warn)
+      if (historyId) await withDeadline(recordRunEvent(historyId, 'stats/' + scope, readFound ? 'observed' : 'unknown',
+        scope === 'full' ? 'Full account read' : 'Search-progress read', Date.now() - startedAt), 2000, 'Stats trace write').catch(console.warn)
     }
   }
 }
