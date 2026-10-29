@@ -3,8 +3,7 @@ import { createRoot } from 'react-dom/client'
 import { Background } from '../../popup/fx/Background.tsx'
 import { useSettings } from '../../popup/hooks/useSettings.ts'
 import { useRunState } from '../../popup/hooks/useRunState.ts'
-import { sendMessage } from '../../shared/messages.ts'
-import type { Message, MessageResponse } from '../../shared/messages.ts'
+import { useMessage } from '../../popup/hooks/useMessage.ts'
 import { useTheme } from '../../popup/hooks/useTheme.ts'
 import { useMotionEnabled } from '../../popup/fx/motion-presets.ts'
 import { StorageGate } from '../../popup/components/StorageGate.tsx'
@@ -84,12 +83,7 @@ function DashboardPage() {
   const [settingsOpen, setSettingsOpen] = useState(false)
   // The run controls' in-flight marker (the popup's Run view's `busy`): one
   // message at a time, so each button disables itself while its action runs.
-  const [busy, setBusy] = useState<Message['type'] | null>(null)
-  // Stable identity so the wiring memo below only moves on real state changes.
-  const send = useCallback((message: Message): Promise<MessageResponse> => {
-    setBusy(message.type)
-    return sendMessage(message).finally(() => setBusy(null))
-  }, [])
+  const { send, busy, error: commandError, clearError } = useMessage()
 
   // One stable context value: rebuilt only when a field the tiles actually
   // read moves (busy per action, runState per tick, settings on save) — not on
@@ -106,6 +100,7 @@ function DashboardPage() {
   return (
     <div className="dash">
       {!finish && <Background style={settings.background} animate={animate} />}
+      {commandError && !finish && <div className="action-feedback action-feedback--dashboard" role="alert"><span>{commandError}</span><button className="icon-btn" onClick={clearError} aria-label="Dismiss action message">×</button></div>}
 
       {/* The gear, pinned top-right over whatever content is showing — the
        * dashboard's own way into its settings surface. */}

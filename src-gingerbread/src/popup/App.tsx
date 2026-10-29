@@ -61,7 +61,7 @@ export function App() {
   const runState = useRunState()
   const stats = useStats()
   const history = usePointsHistory()
-  const { send, busy } = useMessage()
+  const { send, busy, error: commandError, clearError } = useMessage()
 
   useTheme(settings)
   // Low power mode overrides the animations toggle: everything that moves —
@@ -225,6 +225,7 @@ export function App() {
       </header>
 
       <main className="stage">
+        {commandError && <div className="action-feedback" role="alert"><span>{commandError}</span><button className="icon-btn" onClick={clearError} aria-label="Dismiss action message">×</button></div>}
         {/* The banners sit above the stage inside the fixed frame (compact
          * single-line styling keeps the tabbar visible): the Bing-app warning,
          * a restock, a newly sold-out amount. src-donut parity — not dismissible. */}

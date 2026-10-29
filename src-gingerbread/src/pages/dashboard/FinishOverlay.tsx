@@ -131,7 +131,7 @@ export function FinishOverlay({
           Reward Routine Automator finished its run.{' '}
           {allDone
             ? 'Every streak it can reach is done.'
-            : 'A couple of streaks need you to finish them by hand.'}
+            : 'Some tasks need attention or could not be verified.'}
         </p>
 
         {allDone && (
@@ -143,7 +143,7 @@ export function FinishOverlay({
 
         {summary.todo.length > 0 && (
           <section className="finish-section">
-            <h2 className="finish-section-title">Finish these yourself</h2>
+            <h2 className="finish-section-title">Needs attention</h2>
             <ul className="finish-list">
               {summary.todo.map(({ key, value }) => (
                 <li className="finish-row" key={key}>

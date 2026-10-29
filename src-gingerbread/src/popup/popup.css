@@ -1061,3 +1061,5 @@
 .backup-diagnostics-note { margin-top: 12px; }
 .backup-time { min-width: 0; max-width: 108px; background: var(--surface-2); color: var(--text); border: 1px solid var(--line); border-radius: var(--r-sm); padding: 4px; font: inherit; }
 @media (max-width: 380px) { .backup-time { max-width: 96px; } }
+.action-feedback { display: flex; gap: 8px; align-items: center; justify-content: space-between; padding: 8px 12px; margin: 8px 0; border: 1px solid color-mix(in srgb, var(--warn) 40%, var(--line)); border-radius: var(--r-sm); color: var(--text); background: var(--surface-2); font: var(--font); font-size: 12px; }
+.action-feedback--dashboard { position: relative; z-index: 2; margin: 12px 72px 0 16px; }
