@@ -1,5 +1,5 @@
-// Offline integration check in a disposable Brave profile. Requires the repo's
-// existing @playwright/test installation (or NODE_PATH pointing to it).
+// Offline built-extension check in a disposable profile. Uses installed Brave
+// when present, otherwise Playwright Chromium (GINGERBREAD_BROWSER=chromium).
 const { chromium } = require('@playwright/test');
 const { mkdtempSync, readFileSync, rmSync } = require('node:fs');
 const { tmpdir } = require('node:os');
@@ -7,17 +7,15 @@ const path = require('node:path');
 const assert = require('node:assert/strict');
 const { stripTypeScriptTypes } = require('node:module');
 const { runInNewContext } = require('node:vm');
+const { browserOptions, browserName, routeExtensionTabs } = require('./browser-fixture.cjs');
 
 (async () => {
   const profile = mkdtempSync(path.join(tmpdir(), 'gingerbread-brave-fixture-'));
   const build = path.resolve(__dirname, '../dist');
-  const executablePath = process.env.BRAVE_EXECUTABLE || path.join(process.env.ProgramFiles || 'C:/Program Files', 'BraveSoftware/Brave-Browser/Application/brave.exe');
-  let context;
+  const version = JSON.parse(readFileSync(path.join(build, 'manifest.json'), 'utf8')).version;
+  let context, stopNavigation;
   try {
-    context = await chromium.launchPersistentContext(profile, {
-      executablePath, headless: true,
-      args: [`--disable-extensions-except=${build}`, `--load-extension=${build}`, '--no-first-run'],
-    });
+    context = await chromium.launchPersistentContext(profile, browserOptions(build));
     const submitted = [];
     await context.route('https://**/*', async route => {
       const url = new URL(route.request().url());
@@ -26,6 +24,7 @@ const { runInNewContext } = require('node:vm');
       await route.fulfill({ contentType: 'text/html', body: '<!doctype html><form id="sb_form" action="/search"><input id="sb_form_q" name="q"><button id="sb_form_go" type="submit">Search</button></form>' });
     });
     const worker = context.serviceWorkers()[0] || await context.waitForEvent('serviceworker', { timeout: 15000 });
+    stopNavigation = await routeExtensionTabs(worker, context);
     const extensionId = new URL(worker.url()).hostname;
     const control = await context.newPage();
     await control.goto(`chrome-extension://${extensionId}/index.html`);
@@ -76,10 +75,11 @@ const { runInNewContext } = require('node:vm');
     const reply = await injection;
     assert.equal(reply[0].result.ok, false);
     assert.equal(submitted.length, 2, 'Stop must prevent the third submission');
-    console.log(JSON.stringify({ passed: true, version: '6.9.9', browser: 'Brave', submissions: 2,
+    console.log(JSON.stringify({ passed: true, version, browser: browserName(), submissions: 2,
       selectedSearchTab: true, onlyNormalWindows: true, stopPreventedSubmission: true,
       scope: 'offline fixture, disposable profile, no live Rewards account' }));
   } finally {
+    if (stopNavigation) stopNavigation();
     if (context) await context.close();
     const resolved = path.resolve(profile);
     if (!resolved.startsWith(path.resolve(tmpdir()) + path.sep) || !path.basename(resolved).startsWith('gingerbread-brave-fixture-')) throw Error('Unsafe fixture cleanup path');

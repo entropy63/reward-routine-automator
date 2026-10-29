@@ -26,7 +26,7 @@ folder, the name and the version line up:
 | 2 | Reward Routine Automator — Donut | 3.2.1 | `src-donut/` | plain JS, ESM |
 | 3 | Reward Routine Automator — Eclair | 4.1.1 | `src-eclair/` | plain JS, ESM |
 | 4 | Reward Routine Automator — Froyo | 5.1.1 | `src-froyo/` | plain JS, ESM |
-| 5 | Reward Routine Automator — Gingerbread | 6.9.10 | `src-gingerbread/` | React + TypeScript + Vite |
+| 5 | Reward Routine Automator — Gingerbread | 6.10.0 | `src-gingerbread/` | React + TypeScript + Vite |
 
 ## Features
 
@@ -227,7 +227,17 @@ npm --prefix src-gingerbread ci
 npm --prefix src-gingerbread run build
 ```
 
-then load `src-gingerbread/dist`.
+then load `src-gingerbread/dist`. Use Node.js **24.18.0**, pinned in `.node-version`.
+
+Run the reproducible checks from the Gingerbread directory:
+
+```sh
+npm run verify
+npx playwright install chromium
+npm run verify:browser
+```
+
+Browser fixtures use a fresh temporary profile and offline pages. They use installed Brave when available; set `BRAVE_EXECUTABLE` to choose it explicitly or `GINGERBREAD_BROWSER=chromium` to use Playwright Chromium. No existing browser profile is opened. Windows CI includes updater rollback tests; Linux CI runs the built extension in Chromium.
 
 ### Either way
 
@@ -249,10 +259,8 @@ the version Chrome loaded, a **Restart** button appears in the popup's
 notification area and on the routine-finished page. Press it, and the extension
 reloads onto the new files and the button disappears.
 
-Two things to know: the first release carrying the updater (6.9.8) is the one you
-download by hand — every update after that is the updater — and it never updates
-itself, since the running `.cmd` is locked while it executes. If the updater ever
-changes, the release notes will say so and you re-download that one file. The
-other four builds update the old way: unzip the new release over the folder and
+The updater preserves its own folder while running. Replace the `updater` folder from the 6.10.0 ZIP once to get the new checksum and package validation. Future updates save the previous runtime in `updater/previous-install` and restore it if copying or cleanup fails.
+
+The other four builds update the old way: unzip the new release over the folder and
 click Reload at `chrome://extensions`. Design in
 [ADR-024](docs/architecture/adr-024-one-click-updater.md).

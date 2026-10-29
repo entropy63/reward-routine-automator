@@ -273,11 +273,13 @@ try {
     $destDir = Split-Path -Parent $dest
     if (-not (Test-Path -LiteralPath $destDir)) { New-Item -ItemType Directory -Path $destDir -Force | Out-Null }
     Copy-Item -LiteralPath $_.FullName -Destination $dest -Force
+    if ((Get-FileHash -LiteralPath $_.FullName).Hash -ne (Get-FileHash -LiteralPath $dest).Hash) { throw "Copied asset verification failed: $rel" }
   }
 
   # The manifest is the Restart signal. Commit it only once every asset has
   # copied successfully, so a failed copy cannot advertise a ready update.
   Copy-Item -LiteralPath (Join-Path $stageDir 'manifest.json') -Destination (Join-Path $Target 'manifest.json') -Force
+  if ((Get-FileHash -LiteralPath (Join-Path $stageDir 'manifest.json')).Hash -ne (Get-FileHash -LiteralPath (Join-Path $Target 'manifest.json')).Hash) { throw 'Manifest copy verification failed.' }
 
   # Vite emits content-hashed bundles, so without this pass every update would
   # leave the previous version's assets/*-<oldhash>.js behind forever.

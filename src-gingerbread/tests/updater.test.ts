@@ -15,7 +15,7 @@ const manifest = (version: string, build = name, worker = 'worker.js') => JSON.s
 
 // Run the real updater against disposable folders. Both network cmdlets and
 // extraction are replaced: no requests or installation targets are reachable.
-function exercise(options: { version?: string; build?: string; targetBuild?: string; failAsset?: boolean; missingWorker?: boolean; missingImport?: boolean; remoteWorker?: boolean; wrongDigest?: boolean; unsafeArchive?: boolean; failCleanup?: boolean; failRollback?: boolean } = {}) {
+function exercise(options: { version?: string; build?: string; targetBuild?: string; failAsset?: boolean; corruptAsset?: boolean; missingWorker?: boolean; missingImport?: boolean; remoteWorker?: boolean; wrongDigest?: boolean; unsafeArchive?: boolean; failCleanup?: boolean; failRollback?: boolean } = {}) {
   const root = mkdtempSync(join(tmpdir(), 'gingerbread-updater-test-'))
   const target = join(root, 'installed')
   const release = join(root, 'release')
@@ -66,6 +66,7 @@ function Expand-Archive {
 function Copy-Item {
   param($LiteralPath, $Destination, [switch]$Force)
   if ($env:GB_FAIL_ASSET -eq 'yes' -and $LiteralPath.EndsWith('new.js')) { throw 'Simulated asset-copy failure' }
+  if ($env:GB_CORRUPT_ASSET -eq 'yes' -and $LiteralPath.EndsWith('new.js')) { Set-Content -LiteralPath $Destination -Value 'corrupt copy'; return }
   if ($env:GB_FAIL_ROLLBACK -eq 'yes' -and $LiteralPath.Contains('previous-install')) { throw 'Simulated rollback failure' }
   if (-not $LiteralPath.Contains('previous-install') -and $LiteralPath.EndsWith('manifest.json') -and -not (Test-Path -LiteralPath (Join-Path $env:GB_TARGET 'assets/new.js'))) {
     throw 'Manifest copied before assets'
@@ -87,6 +88,7 @@ exit $LASTEXITCODE
     encoding: 'utf8', timeout: 30_000,
     env: { ...process.env, GB_RELEASE: release, GB_TARGET: target, GB_UPDATER: updater, GB_DOWNLOAD: join(root, 'payload.zip'),
       GB_FAIL_ASSET: options.failAsset ? 'yes' : 'no', GB_WRONG_DIGEST: options.wrongDigest ? 'yes' : 'no', GB_UNSAFE_ARCHIVE: options.unsafeArchive ? 'yes' : 'no',
+      GB_CORRUPT_ASSET: options.corruptAsset ? 'yes' : 'no',
       GB_FAIL_CLEANUP: options.failCleanup ? 'yes' : 'no', GB_FAIL_ROLLBACK: options.failRollback ? 'yes' : 'no' },
   })
   const result = {
@@ -135,6 +137,7 @@ for (const options of [
   { version: '99999.0.0' },
   { missingWorker: true },
   { failAsset: true },
+  { corruptAsset: true },
   { missingImport: true },
   { remoteWorker: true },
   { wrongDigest: true },
