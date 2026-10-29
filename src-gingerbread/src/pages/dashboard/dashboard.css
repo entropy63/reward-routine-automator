@@ -1376,6 +1376,19 @@ body {
 }
 
 /* ---------- the run-controls tile ---------- */
+.routine-tools-dialog {
+  width: min(440px, calc(100vw - 32px));
+  max-height: calc(100dvh - 48px);
+  overflow: auto;
+  padding: 20px;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: var(--bg);
+  color: var(--text);
+}
+.routine-tools-dialog::backdrop { background: rgb(0 0 0 / 55%); }
+.routine-tools-dialog-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 16px; }
+.routine-tools-dialog-head h2 { margin: 0; font-size: 18px; }
 /* The ported popup controls stack in one column; the popup.css field /
  * btn-row / action-grid classes carry their own internals. The BASE is the
  * compact form — the stack ADJUSTS to the seat instead of scrolling (user,

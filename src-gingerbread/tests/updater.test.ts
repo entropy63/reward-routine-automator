@@ -84,9 +84,13 @@ function Remove-Item {
 & $env:GB_UPDATER -Target $env:GB_TARGET
 exit $LASTEXITCODE
 `, 'utf8')
+  const childEnvironment = { ...process.env }
+  // CI invokes Node from PowerShell7. Its module search path must not override
+  // Windows PowerShell5's modules when testing the actual Windows launcher.
+  for (const key of Object.keys(childEnvironment)) if (key.toLowerCase() === 'psmodulepath') delete childEnvironment[key]
   const run = spawnSync('powershell.exe', ['-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', wrapper], {
     encoding: 'utf8', timeout: 30_000,
-    env: { ...process.env, GB_RELEASE: release, GB_TARGET: target, GB_UPDATER: updater, GB_DOWNLOAD: join(root, 'payload.zip'),
+    env: { ...childEnvironment, GB_RELEASE: release, GB_TARGET: target, GB_UPDATER: updater, GB_DOWNLOAD: join(root, 'payload.zip'),
       GB_FAIL_ASSET: options.failAsset ? 'yes' : 'no', GB_WRONG_DIGEST: options.wrongDigest ? 'yes' : 'no', GB_UNSAFE_ARCHIVE: options.unsafeArchive ? 'yes' : 'no',
       GB_CORRUPT_ASSET: options.corruptAsset ? 'yes' : 'no',
       GB_FAIL_CLEANUP: options.failCleanup ? 'yes' : 'no', GB_FAIL_ROLLBACK: options.failRollback ? 'yes' : 'no' },

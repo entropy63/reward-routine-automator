@@ -1,10 +1,37 @@
-import { useState } from 'react'
+import { useEffect, useId, useRef, useState } from 'react'
+import { createPortal } from 'react-dom'
 import type { Message, MessageResponse } from '../../shared/messages.ts'
 import type { RunRecord, RunState } from '../../shared/storage.ts'
 import { KEYS } from '../../shared/storage.ts'
 import type { RemainingStep } from '../../background/pure/remaining.ts'
 import { useStorageValue } from '../hooks/useStorageValue.ts'
 import { ActionButton } from './ActionButton.tsx'
+
+/** The tile keeps its full control stack within its smallest designed seat. */
+export function CompactRoutineTools({ runState, send }: { runState: RunState; send: (message: Message) => Promise<MessageResponse> }) {
+  const dialog = useRef<HTMLDialogElement>(null)
+  const heading = useId()
+  const [pending, setPending] = useState(false)
+  const resumable = Boolean(runState.batch || runState.routine)
+  useEffect(() => { if (resumable) dialog.current?.close() }, [resumable])
+  async function togglePause() {
+    setPending(true)
+    try { await send({ type: runState.pause ? 'RESUME_ACTIVITY' : 'PAUSE_ACTIVITY' }) }
+    finally { setPending(false) }
+  }
+  return <>
+    {resumable ? <ActionButton busy={pending} onClick={togglePause}
+      title={runState.pause ? runState.pause.effectiveAt ? 'Paused at a safe boundary' : 'Finishing the current action before pausing' : 'Pause at the next safe action boundary'}>
+      {runState.pause ? runState.pause.effectiveAt ? 'Resume' : 'Cancel pause' : 'Pause'}
+    </ActionButton> : <ActionButton disabled={Boolean(runState.activity)} onClick={() => dialog.current?.showModal()}>More controls</ActionButton>}
+    {createPortal(<dialog ref={dialog} className="routine-tools-dialog" aria-labelledby={heading}>
+      <div className="routine-tools-dialog-head"><h2 id={heading}>Routine controls</h2>
+        <button className="btn btn--ghost" type="button" autoFocus onClick={() => dialog.current?.close()}>Close</button>
+      </div>
+      <RoutineTools runState={runState} send={send} />
+    </dialog>, document.body)}
+  </>
+}
 
 export function RoutineTools({ runState, send }: { runState: RunState; send: (message: Message) => Promise<MessageResponse> }) {
   const [preview, setPreview] = useState<RemainingStep[] | null>(null)

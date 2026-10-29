@@ -31,12 +31,15 @@ const { browserOptions, browserName, routeExtensionTabs } = require('./browser-f
     await control.waitForFunction(async () => !!(await chrome.storage.sync.get('settings')).settings);
     await control.evaluate(async () => {
       const { settings } = await chrome.storage.sync.get('settings');
-      await chrome.storage.sync.set({ settings: { ...settings, randomSearchEnabled: false, scheduledRunEnabled: false,
+      await chrome.storage.sync.set({ settings: { ...settings, startupEnabled: false, randomSearchEnabled: false, scheduledRunEnabled: false,
         searchesPerBatch: 2, rightSizeSearchBatch: false, querySourceOrder: ['local'],
         minDelaySec: 0, maxDelaySec: 0, closeTabsAfterSearch: false, refreshStatsOnPopupOpen: false } });
     });
     const started = await control.evaluate(() => chrome.runtime.sendMessage({ type: 'START_SEARCH_BATCH' }));
     assert.equal(started.ok, true);
+    // Admission acknowledges before its asynchronous preparation publishes the
+    // durable batch. Observing initial idle is not proof of completion.
+    await control.waitForFunction(async () => Boolean((await chrome.storage.local.get('runState')).runState?.batch), { timeout: 30000 });
     const until = Date.now() + 90000;
     let finalState;
     while (Date.now() < until) {

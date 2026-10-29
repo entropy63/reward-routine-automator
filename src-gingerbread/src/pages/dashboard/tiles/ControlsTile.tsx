@@ -19,7 +19,7 @@ import { StepButtons } from '../../../popup/components/StepButtons.tsx'
 import { useDash } from '../ctx.tsx'
 import { Tile } from './Tile.tsx'
 import type { TileProps } from './Tile.tsx'
-import { RoutineTools } from '../../../popup/components/RoutineTools.tsx'
+import { CompactRoutineTools } from '../../../popup/components/RoutineTools.tsx'
 
 export function ControlsTile({ seat, ...rest }: TileProps) {
   const { settings, save, runState, send, busy } = useDash()
@@ -30,6 +30,7 @@ export function ControlsTile({ seat, ...rest }: TileProps) {
     <Tile
       id="controls"
       title="Run controls"
+      action={<CompactRoutineTools runState={runState} send={send} />}
       seat={seat}
       className={
         [seat.w >= 6 ? 'dash-controls-spread' : '', seat.h >= 4 ? 'dash-controls-airy' : '']
@@ -39,7 +40,6 @@ export function ControlsTile({ seat, ...rest }: TileProps) {
       {...rest}
     >
       <div className="dash-controls">
-        <RoutineTools runState={runState} send={send} />
         <ActionButton kind="primary" onClick={() => send({ type: 'RUN_FULL_ROUTINE' })} busy={busy === 'RUN_FULL_ROUTINE'}>
           Run the routine
         </ActionButton>
