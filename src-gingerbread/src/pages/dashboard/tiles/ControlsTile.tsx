@@ -95,7 +95,6 @@ export function ControlsTile({ seat, ...rest }: TileProps) {
             Clear opened tabs
           </ActionButton>
         </div>
-        <p className="dash-muted">Same buttons as the popup's Run tab — they act on the live engine.</p>
       </div>
     </Tile>
   )

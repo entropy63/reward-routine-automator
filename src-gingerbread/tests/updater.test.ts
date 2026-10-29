@@ -161,6 +161,11 @@ for (const options of [
     if (options.wrongDigest) assert.match(result.output, /checksum does not match/)
     if (options.unsafeArchive) assert.match(result.output, /archive entry escapes/)
     if (options.missingImport) assert.match(result.output, /Missing or invalid packaged asset/)
+    if (options.missingWorker) assert.match(result.output, /Missing or invalid packaged asset: worker.js/)
+    if (options.remoteWorker) assert.match(result.output, /not packaged locally/)
+    if (options.failAsset) assert.match(result.output, /Simulated asset-copy failure/)
+    if (options.corruptAsset) assert.match(result.output, /Copied asset verification failed/)
+    if (options.failCleanup) assert.match(result.output, /Simulated stale-file cleanup failure/)
   })
 }
 

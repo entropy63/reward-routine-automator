@@ -76,7 +76,11 @@ const { browserOptions, browserName } = require('./browser-fixture.cjs');
       for (const automatic of [true,false]) {
         await worker.evaluate(async automatic=>{const{settings}=await chrome.storage.sync.get('settings');await chrome.storage.sync.set({settings:{...settings,rightSizeSearchBatch:automatic,experimentalFeatures:true}})},automatic);
         await controls.getByRole('spinbutton',{name:'Searches per batch',exact:true}).waitFor({state:automatic?'hidden':'visible'});
-        await finish.waitForFunction(()=>{const body=document.querySelector('[data-panel-id="controls"] .dash-panel-body');return body&&body.scrollHeight<=body.clientHeight+1},undefined,{timeout:3000});
+        try { await finish.waitForFunction(()=>{const body=document.querySelector('[data-panel-id="controls"] .dash-panel-body');return body&&body.scrollHeight<=body.clientHeight+1},undefined,{timeout:3000}) }
+        catch (error) {
+          console.error('Controls overflow', {viewportWidth:width,automatic,...await controls.locator('.dash-panel-body').evaluate(e=>({height:e.clientHeight,scroll:e.scrollHeight,bodyWidth:e.clientWidth}))});
+          await finish.screenshot({path:path.join(output,'controls-overflow.png')});throw error;
+        }
       }
     }
     await finish.setViewportSize({width:1100,height:780});

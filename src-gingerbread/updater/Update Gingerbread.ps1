@@ -168,7 +168,7 @@ if (-not (Test-Path -LiteralPath $Target -PathType Container)) {
   Write-Host "Not a folder: $Target" -ForegroundColor Red
   exit 1
 }
-$Target = (Resolve-Path -LiteralPath $Target).Path.TrimEnd('\')
+$Target = [IO.Path]::GetFullPath((Resolve-Path -LiteralPath $Target).Path).TrimEnd('\')
 
 $current = Get-ManifestVersion $Target
 if (-not $current) {
