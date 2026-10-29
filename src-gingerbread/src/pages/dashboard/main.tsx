@@ -100,7 +100,7 @@ function DashboardPage() {
   if (!loaded) return <StorageGate error={error} retry={retry} />
 
   return (
-    <div className="dash">
+    <div className="dash" data-low-power={settings.lowPowerMode || undefined}>
       {!finish && <Background style={settings.background} animate={animate} />}
       {commandError && !finish && <NotificationCard className="action-feedback action-feedback--dashboard" urgent onDismiss={clearError} dismissLabel="Dismiss action message">{commandError}</NotificationCard>}
       {!finish && <RewardsLink className="dash-rewards" />}

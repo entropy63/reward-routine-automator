@@ -132,6 +132,14 @@ export interface CouponsRow {
   available: number
 }
 
+export interface CouponActionRow {
+  at: number
+  status: 'checking' | 'applied' | 'none' | 'unverified' | 'failed'
+  detail: string
+  claimed: number
+  attempted: number
+}
+
 // One stock-change news record (redeemRestockNews / redeemSoldOutNews): the
 // amounts that flipped direction since the previous read. Dismissing its UI
 // notice stores a separate acknowledgement; the observation remains intact.
@@ -312,6 +320,7 @@ export const KEYS = {
   lastImageSearch: 'lastImageSearch',
   lastRedeem: 'lastRedeem',
   lastCoupons: 'lastCoupons',
+  lastCouponAction: 'lastCouponAction',
   redeemRestockNews: 'redeemRestockNews',
   redeemSoldOutNews: 'redeemSoldOutNews',
   redeemHistory: 'redeemHistory',

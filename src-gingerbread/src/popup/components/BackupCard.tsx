@@ -4,7 +4,7 @@ import type { BackupDocument } from '../../shared/backup.ts'
 import { useStorageValue } from '../hooks/useStorageValue.ts'
 import { Card } from './Card.tsx'
 
-const LABELS: Record<string, string> = { pointsHistory: 'Points history', redeemHistory: 'Stock history', recentQueries: 'Recent queries', dashLayout: 'Dashboard layout', runHistory: 'Run history', lastOrders: 'Orders and redemption codes' }
+const LABELS: Record<string, string> = { pointsHistory: 'Points history', redeemHistory: 'Stock history', recentQueries: 'Recent queries', dashLayout: 'Dashboard layout', popupWidgetLayout: 'Today widgets', dashHiddenWidgets: 'Dashboard widget visibility', runHistory: 'Run history', lastOrders: 'Orders and redemption codes' }
 
 export function BackupCard() {
   const input = useRef<HTMLInputElement>(null)

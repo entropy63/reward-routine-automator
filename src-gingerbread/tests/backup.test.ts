@@ -24,6 +24,36 @@ test('backup rejects unsupported schemas, transient data, invalid settings and m
   assert.throws(() => validateBackupSettings({ minDelaySec: 20, maxDelaySec: 10 }), /maximum search delay/)
 })
 
+test('backup roundtrips editable widget choices and validates their shared schemas', () => {
+  const layout = { v: 1, items: [{ id: 'history', size: 'compact' }, { id: 'balance', size: 'detailed' }] }
+  const local = { popupWidgetLayout: layout, dashHiddenWidgets: ['catalog', 'orders'], popupWidgetEditing: true }
+  const backup = createBackup(DEFAULT_SETTINGS, local, '6.11.0')
+  assert.deepEqual(backup.data, { popupWidgetLayout: layout, dashHiddenWidgets: ['catalog', 'orders'] })
+  assert.deepEqual(parseBackup(JSON.stringify(backup)), backup)
+  assert.deepEqual(createBackup(DEFAULT_SETTINGS, { popupWidgetLayout: { v: 1, items: [] }, dashHiddenWidgets: [] }, '6.11.0').data,
+    { popupWidgetLayout: { v: 1, items: [] }, dashHiddenWidgets: [] })
+  const invalid = [
+    { popupWidgetLayout: { v: 2, items: [] } },
+    { popupWidgetLayout: { v: 1, items: [{ id: 'unknown', size: 'wide' }] } },
+    { popupWidgetLayout: { v: 1, items: [{ id: 'balance', size: 'huge' }] } },
+    { popupWidgetLayout: { v: 1, items: [{ id: 'balance', size: 'wide' }, { id: 'balance', size: 'compact' }] } },
+    { popupWidgetLayout: { v: 1, items: [], editorOpen: true } },
+    { popupWidgetLayout: { v: 1, items: [{ id: 'balance', size: 'wide', private: 'ignored' }] } },
+    { dashHiddenWidgets: ['unknown'] },
+    { dashHiddenWidgets: ['history', 'history'] },
+    { dashHiddenWidgets: null },
+  ]
+  for (const data of invalid) assert.throws(() => parseBackup(JSON.stringify({ ...backup, data })))
+})
+
+test('imported widget layouts and visibility replace their complete choices in merge or replace', () => {
+  const current = { popupWidgetLayout: { v: 1, items: [{ id: 'balance', size: 'wide' }] }, dashHiddenWidgets: ['history', 'catalog'], pointsHistory: history }
+  const incoming = { popupWidgetLayout: { v: 1, items: [] }, dashHiddenWidgets: [] }
+  assert.deepEqual(mergedBackupData(current, incoming, false), incoming)
+  assert.deepEqual(mergedBackupData(current, incoming, true), incoming)
+  assert.deepEqual(mergedBackupData(current, { pointsHistory: [] }, false), { pointsHistory: history })
+})
+
 test('merge preserves current same-day snapshots and order codes; replace imports requested sections', () => {
   const current = { pointsHistory: history, lastOrders: { at: 20, total: 2, orders: [{ orderNo: 'one', title: 'coins', code: 'current' }, { orderNo: 'two', title: 'coins', code: null }] } }
   const incoming = { pointsHistory: [{ day: '2026-10-27', first: 1, last: 2, at: 1 }, { day: '2026-10-28', first: 0, last: 5, at: 1 }], lastOrders: { at: 5, total: 2, orders: [{ orderNo: 'one', title: 'coins', code: 'old' }, { orderNo: 'two', title: 'coins', code: 'fill' }] } }
@@ -63,12 +93,14 @@ test('restore stores recovery first, excludes unchecked orders and rolls back pa
     },
   } as unknown as typeof chrome
   try {
-    const incoming = createBackup({ ...DEFAULT_SETTINGS, redeemGoalPts: 456 }, { recentQueries: ['new'], lastOrders: { at: 1, total: 0, orders: [] } }, '6.9.11', true)
+    const incoming = createBackup({ ...DEFAULT_SETTINGS, redeemGoalPts: 456 }, { recentQueries: ['new'], popupWidgetLayout: { v: 1, items: [] }, dashHiddenWidgets: ['history'], lastOrders: { at: 1, total: 0, orders: [] } }, '6.9.11', true)
     await assert.rejects(restoreBackup(incoming, false, false), /write failed/)
     assert.equal(writes[0], RESTORE_BACKUP_KEY)
     assert.deepEqual(local.pointsHistory, before.pointsHistory)
     assert.equal(local.recentQueries, undefined)
     assert.equal(local.lastOrders, undefined)
+    assert.equal(local.popupWidgetLayout, undefined)
+    assert.equal(local.dashHiddenWidgets, undefined)
     assert.equal((settings as typeof DEFAULT_SETTINGS).redeemGoalPts, 123)
     assert.ok(local[RESTORE_BACKUP_KEY])
     local.runState = { batch: { remaining: 2 } }

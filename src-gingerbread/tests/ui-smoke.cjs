@@ -26,10 +26,15 @@ const { browserOptions, browserName } = require('./browser-fixture.cjs');
       assert.ok((await worker.evaluate(()=>chrome.windows.getAll())).every(window=>window.type==='normal'));
       await rewards.close();
     }
+    async function waitLayout(test, message) {
+      const until=Date.now()+10000;
+      while(Date.now()<until){const state=await worker.evaluate(()=>chrome.storage.local.get(['popupWidgetLayout','dashHiddenWidgets','dashLayout']));if(test(state))return;await new Promise(resolve=>setTimeout(resolve,50))}
+      throw Error(message);
+    }
     await worker.evaluate(async () => {
       const {settings} = await chrome.storage.sync.get('settings');
       await chrome.storage.sync.set({settings:{...settings,startupEnabled:false,randomSearchEnabled:false,scheduledRunEnabled:false,refreshStatsOnPopupOpen:false,background:'cursor',animationsEnabled:true,lowPowerMode:false,mouseEscapeEnabled:false,appearance:'dark'}});
-      await chrome.storage.local.set({pointsHistory:[{day:'2026-10-28',first:100,last:250,at:100}],lastOrders:{at:100,total:1,orders:[{title:'coins',orderNo:'one',code:'PRIVATE_CODE'}]},
+      await chrome.storage.local.set({pointsHistory:[{day:'2026-10-27',first:50,last:150,at:99},{day:'2026-10-28',first:100,last:250,at:100}],lastOrders:{at:100,total:1,orders:[{title:'coins',orderNo:'one',code:'PRIVATE_CODE'}]},
         lastStats:{at:Date.now(),availablePoints:250,activities:{bingApp:'0/1'}},redeemRestockNews:{at:100,labels:['500 coins']},redeemSoldOutNews:{at:101,labels:['2000 coins']}});
     });
     const errors=[];
@@ -78,6 +83,38 @@ const { browserOptions, browserName } = require('./browser-fixture.cjs');
     await update.evaluate(()=>{window.__diskVersion='6.99.2';window.dispatchEvent(new Event('focus'))});
     await update.getByRole('button',{name:'Dismiss update notification',exact:true}).waitFor();
     await update.close();
+    await worker.evaluate(async()=>{const{settings}=await chrome.storage.sync.get('settings');await chrome.storage.sync.set({settings:{...settings,developerOptionsEnabled:false}})});
+    await popup.getByRole('navigation').getByRole('button',{name:'Today',exact:true}).click();
+    await worker.evaluate(()=>chrome.storage.local.set({lastStats:{at:Date.now(),availablePoints:250,searchPoints:'60/60',activities:{bingSearch:'Day 4 of 7 · 1/1',dailySet:'Day 3 of 7 · 0/3',bingApp:'Day 2 of 7 · 0/1',visualSearch:'Day 0 of 7 · 0/1'}}}));
+    const streakWidget=popup.locator('[data-widget-id="streaks"]');
+    await streakWidget.locator('.streak-week').first().waitFor();
+    assert.equal(await streakWidget.locator('.streak-week').count(),4);
+    assert.equal(await streakWidget.locator('.streak-week').first().getByRole('listitem').count(),7);
+    assert.equal(await streakWidget.locator('.streak-week').first().locator('[data-state="completed"]').count(),4);
+    assert.equal(await streakWidget.locator('.streak-week').nth(1).locator('[data-state="pending"]').count(),1);
+    await popup.screenshot({path:path.join(output,'redesigned-popup.png')});
+    await popup.getByRole('button',{name:'Edit widgets',exact:true}).click();
+    await popup.getByRole('combobox',{name:"Size of Today's streaks",exact:true}).selectOption('compact');
+    await waitLayout(state=>state.popupWidgetLayout?.items.some(item=>item.id==='streaks'&&item.size==='compact'),'Popup widget size not saved');
+    await popup.getByRole('button',{name:'Remove Points history',exact:true}).click();
+    await waitLayout(state=>!state.popupWidgetLayout?.items.some(item=>item.id==='history'),'Popup widget removal not saved');
+    await popup.reload();
+    await popup.locator('[data-widget-id="streaks"].popup-widget--compact').waitFor();
+    assert.equal(await popup.locator('[data-widget-id="history"]').count(),0);
+    await popup.getByRole('button',{name:'Add widgets',exact:true}).click();
+    const todayChooser=popup.getByRole('dialog',{name:'Today widgets',exact:true});
+    await todayChooser.getByLabel('Points history',{exact:true}).check();
+    await todayChooser.getByRole('button',{name:'Close',exact:true}).click();
+    await popup.locator('[data-widget-id="history"] .history-chart').waitFor();
+    await popup.getByRole('button',{name:'Add widgets',exact:true}).click();
+    for(const label of ['Balance',"Today's streaks",'Points history','Points goal','Next routine'])await todayChooser.getByLabel(label,{exact:true}).uncheck();
+    await todayChooser.getByRole('button',{name:'Close',exact:true}).click();
+    await waitLayout(state=>state.popupWidgetLayout?.items.length===0,'Explicit empty popup layout not saved');
+    await popup.getByRole('heading',{name:'Make room for what matters'}).waitFor();
+    await popup.getByRole('button',{name:'Edit widgets',exact:true}).click();
+    await popup.getByRole('button',{name:'Reset layout',exact:true}).click();
+    await waitLayout(state=>!state.popupWidgetLayout,'Popup default layout not restored');
+    await popup.getByRole('button',{name:'Done editing',exact:true}).click();
     await popup.getByRole('button',{name:'Settings',exact:true}).click();
     await popup.getByRole('heading',{name:'Backup and restore',exact:true}).waitFor();
     const downloadEvent=popup.waitForEvent('download');
@@ -89,8 +126,22 @@ const { browserOptions, browserName } = require('./browser-fixture.cjs');
     assert.equal(backup.settings.background,'cursor');
     backup.settings.redeemGoalPts=9999;
     backup.data.pointsHistory=[{day:'2026-10-28',first:0,last:1,at:1},{day:'2026-10-27',first:10,last:20,at:1}];
-    await popup.locator('input[type=file]').setInputFiles({name:'restore.json',mimeType:'application/json',buffer:Buffer.from(JSON.stringify(backup))});
-    await popup.getByRole('heading',{name:'Review restore'}).waitFor();
+    // A download can complete before React commits the end of Export's busy
+    // state. Use the real button so Playwright waits for actionability instead
+    // of bypassing its disabled state through the hidden input.
+    const chooseEvent=popup.waitForEvent('filechooser');
+    await popup.getByRole('button',{name:'Choose backup',exact:true}).click();
+    const chooser=await chooseEvent;
+    await chooser.setFiles({name:'restore.json',mimeType:'application/json',buffer:Buffer.from(JSON.stringify(backup))});
+    try { await popup.getByRole('heading',{name:'Review restore'}).waitFor() }
+    catch (error) {
+      console.error('Backup import did not reach review',await popup.locator('.backup-card').evaluate(card=>({
+        error:card.querySelector('.backup-error')?.textContent,
+        message:card.querySelector('.backup-message')?.textContent,
+        buttons:[...card.querySelectorAll('button')].map(button=>({label:button.textContent,disabled:button.disabled})),
+      })));
+      throw error;
+    }
     await popup.getByRole('button',{name:'Restore reviewed backup',exact:true}).click();
     await popup.getByRole('status').filter({hasText:'Backup restored.'}).waitFor();
     const restored=await worker.evaluate(async()=>({sync:await chrome.storage.sync.get('settings'),local:await chrome.storage.local.get(['pointsHistory','lastOrders','gingerbreadBeforeRestore'])}));
@@ -128,6 +179,23 @@ const { browserOptions, browserName } = require('./browser-fixture.cjs');
     assert.equal(await finish.evaluate(()=>document.activeElement?.getAttribute('aria-label')),'Settings');
     await checkRewardsLink(finish);
     const controls=finish.locator('[data-panel-id="controls"]');
+    await finish.getByRole('button',{name:'Add widgets',exact:true}).click();
+    const dashboardChooser=finish.getByRole('dialog',{name:'Dashboard widgets',exact:true});
+    await dashboardChooser.getByLabel("Today's streaks",{exact:true}).uncheck();
+    await dashboardChooser.getByRole('button',{name:'Close',exact:true}).click();
+    await waitLayout(state=>state.dashHiddenWidgets?.includes('streaks'),'Dashboard hide not saved');
+    await finish.locator('[data-panel-id="streaks"]').waitFor({state:'hidden'});
+    await finish.getByRole('button',{name:'Add widgets',exact:true}).click();
+    await dashboardChooser.getByLabel("Today's streaks",{exact:true}).check();
+    await dashboardChooser.getByRole('button',{name:'Close',exact:true}).click();
+    await finish.locator('[data-panel-id="streaks"]').waitFor();
+    await finish.getByRole('button',{name:'Edit layout',exact:true}).click();
+    const size=controls.getByRole('combobox',{name:'Size of Run controls',exact:true});
+    const nextSize=await size.locator('option').nth(1).getAttribute('value');
+    await size.selectOption(nextSize);
+    await waitLayout(state=>state.dashLayout?.items.some(item=>item.i==='controls'&&`${item.w}x${item.h}`===nextSize),'Dashboard resize not saved');
+    await finish.getByRole('button',{name:'Default layout',exact:true}).click();
+    await finish.getByRole('button',{name:'Done',exact:true}).click();
     assert.ok(await controls.locator('.dash-panel-body').evaluate(e=>e.scrollHeight<=e.clientHeight+1),'Smallest dashboard controls fit without scrolling');
     await controls.getByRole('button',{name:'More controls',exact:true}).click();
     await finish.getByRole('dialog',{name:'Routine controls',exact:true}).waitFor();
@@ -147,6 +215,7 @@ const { browserOptions, browserName } = require('./browser-fixture.cjs');
       }
     }
     await finish.setViewportSize({width:1100,height:780});
+    await finish.waitForFunction(()=>Array.from(document.querySelectorAll('.react-grid-item')).every(item=>item.getBoundingClientRect().right<=window.innerWidth+1));
     await finish.screenshot({path:path.join(output,'dashboard-controls.png')});
     await worker.evaluate(async()=>{const{settings}=await chrome.storage.sync.get('settings');await chrome.storage.sync.set({settings:{...settings,lowPowerMode:true}})});
     await finish.locator('.cursor-glow--rest').waitFor();
@@ -177,7 +246,7 @@ const { browserOptions, browserName } = require('./browser-fixture.cjs');
     await finish.getByRole('button',{name:'Run the routine',exact:true}).click();
     await finish.locator('.action-feedback').filter({hasText:'current activity'}).waitFor();
     assert.deepEqual(errors,[]);
-    console.log(JSON.stringify({passed:true,browser:browserName(),version:JSON.parse(fs.readFileSync(path.join(build,'manifest.json'),'utf8')).version,compactDismissibleNotices:true,dismissalsSurviveReopen:true,newNewsAndUpdateReappear:true,previewIsolated:true,rewardsLinksOnAllThreeSurfaces:true,narrowFinishActions:true,backupRoundtrip:true,ordersExcludedByDefault:true,mergePreservesCurrent:true,recoveryBackup:true,oneFinishBackground:true,finishFocusTrap:true,liveLowPower:true,liveTheme:true,reducedMotion:true,hiddenMotionPaused:true,storageErrorRetry:true,commandErrorsVisible:true,output}));
+    console.log(JSON.stringify({passed:true,browser:browserName(),version:JSON.parse(fs.readFileSync(path.join(build,'manifest.json'),'utf8')).version,popupWidgetsAddRemoveResize:true,dashboardWidgetsAddRemoveResize:true,emptyLayoutAndReset:true,sevenSegmentEvidence:true,sharedHistory:true,compactDismissibleNotices:true,dismissalsSurviveReopen:true,newNewsAndUpdateReappear:true,previewIsolated:true,rewardsLinksOnAllThreeSurfaces:true,narrowFinishActions:true,backupRoundtrip:true,ordersExcludedByDefault:true,mergePreservesCurrent:true,recoveryBackup:true,oneFinishBackground:true,finishFocusTrap:true,liveLowPower:true,liveTheme:true,reducedMotion:true,hiddenMotionPaused:true,storageErrorRetry:true,commandErrorsVisible:true,output}));
   } finally {
     if(context)await context.close();
     if(!path.resolve(profile).startsWith(path.resolve(os.tmpdir())+path.sep)||!path.basename(profile).startsWith('gingerbread-ui-check-'))throw Error('Unsafe cleanup path');

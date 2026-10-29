@@ -2,9 +2,11 @@ import { DEFAULT_SETTINGS } from './settings.ts'
 import type { Settings } from './settings.ts'
 import { validateSettings } from './settings-validation.ts'
 import { withActivityLock } from './activity-lock.ts'
+import { normalizeWidgets, WIDGETS } from '../popup/lib/widget-layout.ts'
+import { PANEL_IDS } from '../pages/dashboard/tiles/registry.ts'
 
 export const BACKUP_LIMIT_BYTES = 2 * 1024 * 1024
-export const BACKUP_KEYS = ['pointsHistory', 'redeemHistory', 'dashLayout', 'recentQueries', 'runHistory'] as const
+export const BACKUP_KEYS = ['pointsHistory', 'redeemHistory', 'dashLayout', 'popupWidgetLayout', 'dashHiddenWidgets', 'recentQueries', 'runHistory'] as const
 export const RESTORE_BACKUP_KEY = 'gingerbreadBeforeRestore'
 type Data = Record<string, unknown>
 export interface BackupDocument {
@@ -47,6 +49,13 @@ function validateData(key: string, value: unknown): void {
     const legacy = Array.isArray(value.order) && value.order.length <= 50 && value.order.every((v) => shortString(v, 50)) && plain(value.span) && plain(value.rows)
     const columns = Array.isArray(value.columns) && value.columns.length <= 12 && value.columns.every((c) => Array.isArray(c) && c.length <= 50 && c.every((v) => shortString(v, 50)))
     if (!modern && !legacy && !columns) throw new Error('Unsupported dashboard layout.')
+  } else if (key === 'popupWidgetLayout') {
+    if (!plain(value) || value.v !== 1 || !Array.isArray(value.items) || value.items.length > WIDGETS.length || Object.keys(value).some(key => !['v', 'items'].includes(key)) || value.items.some(item => !plain(item) || Object.keys(item).some(key => !['id', 'size'].includes(key)))) throw new Error('Invalid popup widget layout.')
+    const normalized = normalizeWidgets(value)
+    const items = value.items as { id?: unknown; size?: unknown }[]
+    if (normalized.length !== items.length || normalized.some((item, index) => item.id !== items[index].id || item.size !== items[index].size)) throw new Error('Unsupported popup widget layout.')
+  } else if (key === 'dashHiddenWidgets') {
+    if (!list || list.length > PANEL_IDS.length || new Set(list).size !== list.length || list.some(id => !PANEL_IDS.includes(id as typeof PANEL_IDS[number]))) throw new Error('Invalid dashboard widget visibility.')
   }
 }
 
@@ -94,6 +103,12 @@ export function createBackup(settings: unknown, local: Data, extensionVersion: s
 export function mergedBackupData(current: Data, incoming: Data, replace: boolean): Data {
   const next: Data = {}
   for (const [key, value] of Object.entries(incoming)) {
+    // Layout/visibility are complete choices, not append-only histories. An
+    // imported empty visibility list intentionally makes all panels visible.
+    if (key === 'popupWidgetLayout' || key === 'dashHiddenWidgets') {
+      next[key] = structuredClone(value)
+      continue
+    }
     if (!replace && key === 'lastOrders' && plain(value) && plain(current[key])) {
       const old = current[key] as Data
       const currentOrders = Array.isArray(old.orders) ? old.orders : []

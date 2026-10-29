@@ -115,7 +115,7 @@ export function App() {
   if (!loaded) return <StorageGate error={error} retry={retry} />
 
   return (
-    <div className="app" style={{ height }}>
+    <div className="app" style={{ height }} data-low-power={settings.lowPowerMode || undefined}>
       <Background style={settings.background} animate={motionOn} />
 
       <header className="topbar">
@@ -139,12 +139,11 @@ export function App() {
            * name that shows in the extension popup should be the code name") —
            * the full "Reward Routine Automator — Gingerbread" still names the
            * build everywhere it identifies itself (manifest, tab title, zip). */}
-          <span className="brand-title">{settingsOpen ? 'Settings' : 'Gingerbread'}</span>
+          <div className="brand-copy"><span className="brand-title">{settingsOpen ? 'Settings' : 'Gingerbread'}</span>
+            <span className={`status-pill${status.live ? ' status-pill--live' : ''}`} title={status.label}>{status.label}</span>
+          </div>
         </div>
         <div className="topbar-actions">
-          <span className={`status-pill${status.live ? ' status-pill--live' : ''}`} title={status.label}>
-            {status.label}
-          </span>
           <RewardsLink />
           {/* The full-screen dashboard (user request, 2026-09-08): always
            * visible, not dev-gated — it is the extension's analytics surface,
@@ -166,6 +165,19 @@ export function App() {
           >
             <RefreshIcon />
           </button>
+          {!settingsOpen && (
+            /* data-no-escape: the gear never dodges — it's the way into
+             * Settings, where the troll feature lives (user request). */
+            <button
+              className="icon-btn"
+              onClick={() => setSettingsOpen(true)}
+              aria-label="Settings"
+              title="Settings"
+              data-no-escape
+            >
+              <GearIcon />
+            </button>
+          )}
           {/* Developer Options (gated on the Settings toggle, like the other
            * builds): the finish-screen opener — the dashboard overlay the
            * routine itself opens at endRoutine — the once-per-day reset, so
@@ -176,7 +188,7 @@ export function App() {
            * with sample payloads. The launches themselves walk their own
            * gates. */}
           {!settingsOpen && settings.developerOptionsEnabled && (
-            <>
+            <div className="developer-toolbar" role="group" aria-label="Developer tools">
               <button
                 className="icon-btn"
                 onClick={() => send({ type: 'OPEN_ROUTINE_DONE' })}
@@ -209,21 +221,9 @@ export function App() {
               >
                 <BellIcon />
               </button>
-            </>
+            </div>
           )}
-          {!settingsOpen && (
-            /* data-no-escape: the gear never dodges — it's the way into
-             * Settings, where the troll feature lives (user request). */
-            <button
-              className="icon-btn"
-              onClick={() => setSettingsOpen(true)}
-              aria-label="Settings"
-              title="Settings"
-              data-no-escape
-            >
-              <GearIcon />
-            </button>
-          )}
+
         </div>
       </header>
 
