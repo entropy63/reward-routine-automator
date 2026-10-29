@@ -8,7 +8,7 @@
 import { localDayKey } from '../core/day.ts'
 import { getSettings } from '../../shared/settings.ts'
 import type { Settings, StepId } from '../../shared/settings.ts'
-import { readRunState, updateRunState, currentStopEpoch, consumeRoutine } from '../core/run-state.ts'
+import { readRunState, updateRunState, currentStopEpoch, consumeRoutine, pauseBoundary, reserveRecoveryActions } from '../core/run-state.ts'
 import { holdKeepAlive, releaseKeepAlive } from '../core/keepalive.ts'
 import { sleep } from '../core/delays.ts'
 import { closeTabs, closeOtherDashboardTabs, closeBingRewardsTabs } from '../core/tabs.ts'
@@ -18,7 +18,11 @@ import type { Activities, SkippedStep, Stats } from '../../shared/storage.ts'
 import { slotMissingDefaults } from '../pure/orders.ts'
 import { STEP_DONE_CHECKS, statsAreCurrent, stepSkipReason } from '../pure/verdicts.ts'
 import { planRoutineRecovery } from '../pure/routine-recovery.ts'
-import { refreshStats, checkRedeemAvailability } from './reads.ts'
+import { refreshStats } from './reads.ts'
+import { invalidateStatsEvidence } from '../readers/stats.ts'
+import { startRunRecord, recordRunEvent, finishRunRecord } from '../core/run-history.ts'
+import { inQuietHours, quietHoursEndAt } from '../pure/run-tools.ts'
+import { remainingSteps } from '../pure/remaining.ts'
 import { startSearchBatch } from './search.ts'
 import { runStartupClaim } from '../readers/claim.ts'
 import { openDailySetOnRewardsDashboard, openKeepEarningActivities } from '../readers/rewards-section.ts'
@@ -94,7 +98,6 @@ export function normalizeStartupOrder(order: StepId[] | null | undefined): StepI
 // numbers still reflect the day before the steps churn the dashboard.
 async function runStartupReads(): Promise<void> {
   await refreshStats()
-  await checkRedeemAvailability()
 }
 
 // ---------- Skip-when-done ----------
@@ -140,6 +143,7 @@ async function reportSkippedStep(id: StepId, reason: string): Promise<void> {
   await updateRunState((state) => {
     if (state.routine) state.routine.skipped.push({ id, reason })
   })
+  await recordRunEvent((await readRunState()).routine?.historyId, id, 'skipped', reason)
 }
 
 // ---------- The confirm dialog ----------
@@ -269,6 +273,13 @@ export async function routineSummaryQuery(
     const done = Number(match[1]) >= Number(match[2]) && Number(match[2]) > 0
     if (!done) parts.push(`${key}:${value}`)
   }
+  if (verification) {
+    const settings = await getSettings()
+    for (const step of remainingSteps(fresh ? stats : null, settings)) {
+      if (!['claim', 'keepEarning'].includes(step.id) || !verification.enabledSteps.includes(step.id) || step.status === 'complete') continue
+      parts.push(`${step.id}:${step.status === 'unknown' ? 'not verified' : 'incomplete'}`)
+    }
+  }
   return parts.join(';')
 }
 
@@ -309,16 +320,18 @@ export function routineSkippedQuery(skipped: SkippedStep[]): string {
 // tail (startSearchBatch's handoff IS the routine running); the skip reasons
 // let the scheduled driver surface them to the Activity row instead of a
 // console.log nobody reads.
-export type StartupOutcome = 'ran' | 'disabled' | 'already-today' | 'cancelled'
+export type StartupOutcome = 'ran' | 'disabled' | 'already-today' | 'cancelled' | 'quiet-hours' | 'postponed'
 
 let sequenceStarting = false
 export async function runStartupSequence(
-  options: { manual?: boolean; scheduled?: boolean } = {},
+  options: { manual?: boolean; scheduled?: boolean; selectedSteps?: StepId[] } = {},
 ): Promise<StartupOutcome> {
   if (sequenceStarting) return 'cancelled'
   sequenceStarting = true
+  let preparationEpoch: number | null = null
   try {
     const state = await readRunState()
+    preparationEpoch = state.stopEpoch
     if (state.routine || state.batch || state.activity) {
       // A duplicate click never clears a live owner. It may recover an old
       // worker's expired original routine, which otherwise blocks every later
@@ -328,20 +341,32 @@ export async function runStartupSequence(
       }
       return 'cancelled'
     }
-    return await runStartupSequenceOwned(options)
+    let claimed = false
+    await updateRunState(current => {
+      if (current.stopEpoch === preparationEpoch && !current.routine && !current.batch && !current.activity) {
+        current.activity = { label: 'Preparing routine' }
+        claimed = true
+      }
+    })
+    if (!claimed) return 'cancelled'
+    return await runStartupSequenceOwned(options, preparationEpoch)
   } finally {
     sequenceStarting = false
+    await updateRunState(state => {
+      if (state.stopEpoch === preparationEpoch && state.activity?.label === 'Preparing routine') state.activity = null
+    })
   }
 }
 
 async function runStartupSequenceOwned(
-  { manual = false, scheduled = false }: { manual?: boolean; scheduled?: boolean } = {},
+  { manual = false, scheduled = false, selectedSteps }: { manual?: boolean; scheduled?: boolean; selectedSteps?: StepId[] } = {},
+  myEpoch: number = 0,
 ): Promise<StartupOutcome> {
   const settings = await getSettings()
 
   // A stop during an earlier step must also cancel the steps not started yet:
   // stopAllActivity() bumps the epoch, and a mismatch means 'stopped'.
-  const myEpoch = await currentStopEpoch()
+  if ((await currentStopEpoch()) !== myEpoch) return 'cancelled'
 
   // A sequence interrupted by the last shutdown must not resume now that a
   // fresh one is starting, and tab ids from the last session are meaningless.
@@ -349,8 +374,10 @@ async function runStartupSequenceOwned(
   // One write: the routine field and the capture bookkeeping are both inside
   // the document.
   await updateRunState((state) => {
-    state.routine = null
-    state.captures = { capturing: [], opened: {} }
+    if (state.stopEpoch === myEpoch) {
+      state.routine = null
+      state.captures = { capturing: [], opened: {} }
+    }
   })
 
   // The master switch governs BROWSER STARTS only: a scheduled run answers to
@@ -358,6 +385,16 @@ async function runStartupSequenceOwned(
   // the clock never fires the routine the user didn't opt into), and a manual
   // press IS the permission to run (ADR-020).
   if (!manual && !scheduled && !settings.startupEnabled) return 'disabled'
+  if (!manual) {
+    const postponed = await getLocal<{ until: number }>(KEYS.postponedRoutine)
+    if (postponed && postponed.until > Date.now()) return 'postponed'
+    const quietUntil = quietHoursEndAt(settings)
+    if (quietUntil) {
+      await setLocal(KEYS.postponedRoutine, { day: localDayKey(), until: quietUntil, source: 'startup' })
+      await chrome.alarms.create('postponedRoutine', { when: quietUntil })
+      return 'quiet-hours'
+    }
+  }
 
   // Once per day: if the routine already completed today, don't redo it on a
   // second browser launch. The stale-state cleanup above has already run by
@@ -388,16 +425,20 @@ async function runStartupSequenceOwned(
     // nothing routine-shaped left. lastRoutineDay is NOT written: today does
     // not count as done, so the next launch retries the routine.
     await updateRunState((state) => {
-      state.routine = null
-      state.captures = { capturing: [], opened: {} }
+      if (state.stopEpoch === myEpoch) {
+        state.routine = null
+        state.captures = { capturing: [], opened: {} }
+      }
     })
     console.log('Startup: routine cancelled at the confirm dialog.')
     return 'cancelled'
   }
 
   const queue = normalizeStartupOrder(settings.startupOrder).filter(
-    (id) => settings[STARTUP_STEPS[id].enabledKey],
+    (id) => settings[STARTUP_STEPS[id].enabledKey] && (!selectedSteps || selectedSteps.includes(id)),
   )
+  if ((await currentStopEpoch()) !== myEpoch) return 'cancelled'
+  const historyId = await startRunRecord(manual ? selectedSteps ? 'remaining-work' : 'manual' : scheduled ? 'scheduled' : 'startup', queue, await getLocal<Stats>(KEYS.lastStats))
 
   // Marks every step below as part of the routine, so in routine mode their
   // tabs are stashed for endRoutine() instead of closed per step. The start
@@ -411,7 +452,9 @@ async function runStartupSequenceOwned(
       state.routine = {
         startDay: localDayKey(), pendingSteps: [], pendingTabs: [], skipped: [], enabledSteps: queue,
         ownerUntilAt: Date.now() + ORIGINAL_STEP_LEASE_MS,
+        startedAt: Date.now(), historyId, recoveryActions: 0,
       }
+      if (state.activity?.label === 'Preparing routine') state.activity = null
     }
   })
   if ((await currentStopEpoch()) !== myEpoch) return 'cancelled'
@@ -433,6 +476,16 @@ async function runStartupSequenceOwned(
     // Stop checkpoint: a bumped epoch means the remaining steps, this one
     // included, are cancelled.
     if ((await currentStopEpoch()) !== myEpoch) break
+    if (await pauseBoundary()) {
+      await updateRunState(state => {
+        if (state.stopEpoch === myEpoch && state.routine) {
+          state.routine.pendingSteps = queue.slice(i)
+          state.routine.recovering = true
+        }
+      })
+      await recordRunEvent(historyId, id, 'paused', 'Waiting at an action boundary')
+      return 'ran'
+    }
     await renewOriginalStepLease(myEpoch)
 
     // Skip-when-done: a step whose today's read already shows complete never
@@ -458,6 +511,7 @@ async function runStartupSequenceOwned(
             if (state.routine) state.routine.pendingSteps = rest
           })
         }
+        await recordRunEvent(historyId, id, 'started')
         await startSearchBatch()
         return 'ran'
       } catch (e) {
@@ -470,8 +524,13 @@ async function runStartupSequenceOwned(
     }
 
     try {
+      const started = Date.now()
+      await recordRunEvent(historyId, id, 'started')
       await STARTUP_STEPS[id].run()
+      if (id !== 'stats') invalidateStatsEvidence()
+      await recordRunEvent(historyId, id, 'action-finished', 'Progress is checked during final verification', Date.now() - started)
     } catch (e) {
+      await recordRunEvent(historyId, id, 'failed', 'The step failed; final verification will check remaining work')
       console.warn(`Startup: step "${id}" failed:`, e)
     }
   }
@@ -501,6 +560,7 @@ async function renewOriginalStepLease(epoch: number): Promise<void> {
 // and use bounded final recovery instead of blindly replaying the whole run.
 async function recoverInterruptedOriginalRoutine(): Promise<boolean> {
   const state = await readRunState()
+  if (state.pause) return false
   if (!state.routine || state.routine.recovering || state.batch ||
       Number(state.routine.ownerUntilAt || 0) > Date.now()) return false
   let claimed = false
@@ -519,14 +579,14 @@ async function recoverInterruptedOriginalRoutine(): Promise<boolean> {
 
 async function runQueuedStartupSteps(): Promise<void> {
   const initial = await readRunState()
-  if (!initial.routine || initial.batch) return
+  if (!initial.routine || initial.batch || await pauseBoundary()) return
   const myEpoch = initial.stopEpoch
   const queue = initial.routine.pendingSteps
   if (queue.includes('claim') && queue[0] !== 'stats') await refreshStats()
 
   while (true) {
     const state = await readRunState()
-    if (state.stopEpoch !== myEpoch || !state.routine || state.batch) return
+    if (state.stopEpoch !== myEpoch || !state.routine || state.batch || await pauseBoundary()) return
     const id = state.routine.pendingSteps[0] as StepId | undefined
     if (!id) return
     let claimed = false
@@ -540,7 +600,7 @@ async function runQueuedStartupSteps(): Promise<void> {
     await renewOriginalStepLease(myEpoch)
     const step = STARTUP_STEPS[id]
     const settings = await getSettings()
-    if (!step || id === 'search' || !settings[step.enabledKey]) continue
+    if (!step || !settings[step.enabledKey]) continue
     if ((await currentStopEpoch()) !== myEpoch) return
     const reason = await routineStepSkipped(id)
     if (reason) {
@@ -549,8 +609,17 @@ async function runQueuedStartupSteps(): Promise<void> {
     }
     if ((await currentStopEpoch()) !== myEpoch) return
     try {
+      const started = Date.now()
+      await recordRunEvent(state.routine.historyId, id, 'started')
+      if (id === 'search') {
+        await startSearchBatch()
+        return
+      }
       await step.run()
+      if (id !== 'stats') invalidateStatsEvidence()
+      await recordRunEvent(state.routine.historyId, id, 'action-finished', 'Progress is checked during final verification', Date.now() - started)
     } catch (error) {
+      await recordRunEvent(state.routine.historyId, id, 'failed', 'The step failed')
       console.warn('Routine: queued step failed:', id, error)
     }
   }
@@ -574,6 +643,7 @@ export async function runPendingStartupSteps(): Promise<void> {
 export async function resumeRoutineRecovery(): Promise<void> {
   if (sequenceStarting || pendingTailInFlight || routineFinishInFlight) return
   const state = await readRunState()
+  if (state.pause) return
   if (!state.routine) {
     await chrome.alarms.clear(ROUTINE_RECOVERY_ALARM)
     return
@@ -589,12 +659,16 @@ export async function resumeRoutineRecovery(): Promise<void> {
 export async function endRoutine(): Promise<void> {
   if (routineFinishInFlight) return
   routineFinishInFlight = true
+  const finishingEpoch = await currentStopEpoch()
   holdKeepAlive()
   try {
     await verifyAndFinishRoutine()
   } finally {
     routineFinishInFlight = false
     releaseKeepAlive()
+    await updateRunState(state => {
+      if (state.stopEpoch === finishingEpoch && state.activity?.label === 'Finishing routine') state.activity = null
+    })
   }
 }
 
@@ -605,6 +679,7 @@ async function verifyAndFinishRoutine(): Promise<void> {
   await updateRunState(state => {
     if (state.stopEpoch === myEpoch && state.routine) state.routine.recovering = true
   })
+  if (await pauseBoundary()) return
   // Persist the wake-up before the first settle/read. A worker eviction here
   // must not strand a routine with its completion marker still unwritten.
   await chrome.alarms.create(ROUTINE_RECOVERY_ALARM, { delayInMinutes: 1, periodInMinutes: 1 })
@@ -614,18 +689,20 @@ async function verifyAndFinishRoutine(): Promise<void> {
   // still owns the routine until the last fresh verification is complete.
   while (true) {
     if ((await currentStopEpoch()) !== myEpoch) return
+    if (await pauseBoundary()) return
     let readStarted = Date.now()
     try {
       await sleep(ROUTINE_FINISH_SETTLE_MS)
       if ((await currentStopEpoch()) !== myEpoch) return
+      if (await pauseBoundary()) return
       readStarted = Date.now()
       finalReadStartedAt = readStarted
-      await refreshStats()
+      await refreshStats({ scope: 'full', notBefore: readStarted })
     } catch (error) {
       console.warn('Routine: final verification read failed:', error)
     }
     const state = await readRunState()
-    if (state.stopEpoch !== myEpoch || !state.routine || state.batch) return
+    if (state.stopEpoch !== myEpoch || !state.routine || state.batch || await pauseBoundary()) return
     const settings = await getSettings()
     const stats = await getLocal<Stats>(KEYS.lastStats)
     const plan = planRoutineRecovery(stats, readStarted, state.routine.enabledSteps || [], settings,
@@ -634,6 +711,10 @@ async function verifyAndFinishRoutine(): Promise<void> {
       if (plan.reason === 'limit' || plan.reason === 'no-progress' || plan.reason === 'stale-read') {
         await setLastTabAction('Routine verification stopped: ' + plan.reason + '; remaining work needs a later check', null)
       }
+      break
+    }
+    if (!(await reserveRecoveryActions(plan.steps.length))) {
+      await setLastTabAction('Routine recovery budget reached; remaining work needs a later check', null)
       break
     }
     let reserved = false
@@ -658,13 +739,15 @@ async function verifyAndFinishRoutine(): Promise<void> {
     await runQueuedStartupSteps()
   }
   if ((await currentStopEpoch()) !== myEpoch) return
+  if (await pauseBoundary()) return
 
   // Read the routine and clear it as ONE step — a stop landing between the
   // read and the clear would otherwise let a stopped routine sweep its
   // stashed tabs.
-  const consumed = await consumeRoutine()
-  if (!consumed) return
   await chrome.alarms.clear(ROUTINE_RECOVERY_ALARM)
+  if ((await currentStopEpoch()) !== myEpoch || await pauseBoundary()) return
+  const consumed = await consumeRoutine(myEpoch)
+  if (!consumed) return
 
   // Only a live routine gets this far, i.e. a routine truly finished (inline
   // end or post-search-batch tail — both land here). A stopped routine never
@@ -673,7 +756,17 @@ async function verifyAndFinishRoutine(): Promise<void> {
   // marked, not the finish day: a routine that crosses midnight belongs to
   // the day it began, or the new day would be silently marked done without
   // ever getting its routine.
-  await setLocal(KEYS.lastRoutineDay, consumed.startDay || localDayKey())
+  if ((await currentStopEpoch()) !== myEpoch) return
+  const finalStats = await getLocal<Stats>(KEYS.lastStats)
+  if ((await currentStopEpoch()) !== myEpoch) return
+  const finalSettings = await getSettings()
+  if ((await currentStopEpoch()) !== myEpoch) return
+  const verifiedStats = Number(finalStats?.at) >= finalReadStartedAt ? finalStats : null
+  const enabledResults = remainingSteps(verifiedStats, finalSettings).filter(step => consumed.enabledSteps?.includes(step.id))
+  const runOutcome = enabledResults.some(step => step.status === 'unknown') ? 'unknown' : enabledResults.some(step => step.status === 'incomplete') ? 'incomplete' : 'completed'
+  await finishRunRecord(consumed.historyId, runOutcome,
+    runOutcome === 'completed' ? 'Enabled work verified complete' : 'Some enabled work remains or could not be verified', finalStats)
+  if ((await currentStopEpoch()) !== myEpoch) return
 
   const skippedQuery = routineSkippedQuery(consumed.skipped)
   const ids = consumed.pendingTabs.filter((id) => typeof id === 'number')
@@ -692,6 +785,7 @@ async function verifyAndFinishRoutine(): Promise<void> {
 
   try {
     const summary = await routineSummaryQuery({ enabledSteps: consumed.enabledSteps || [], readStartedAt: finalReadStartedAt })
+    if ((await currentStopEpoch()) !== myEpoch) return
     const params = new URLSearchParams()
     if (summary) params.set('q', summary)
     if (skippedQuery) params.set('s', skippedQuery)
@@ -700,10 +794,11 @@ async function verifyAndFinishRoutine(): Promise<void> {
       active: true,
     })
     finishTabId = finishTab.id ?? null
+    if ((await currentStopEpoch()) !== myEpoch) return
     // The finish screen is now the current dashboard; any dashboards left open
     // by earlier runs are stale, so close them (user request, 2026-09-26),
     // sparing the one just opened. Best-effort — never fails the finish.
-    await closeOtherDashboardTabs(finishTabId)
+    await closeOtherDashboardTabs(finishTabId, myEpoch)
   } catch (e) {
     // The summary is a nicety, never a failure of the routine itself.
     console.warn('Routine: could not open the finish screen:', e)
@@ -717,10 +812,12 @@ async function verifyAndFinishRoutine(): Promise<void> {
   // sit through (Bing credits the visit in that window), so this pass is for
   // the strays and the two counts are reported together there. Best-effort — a
   // tab that cannot be enumerated or closed never fails the finish.
-  const swept = await closeBingRewardsTabs([finishTabId, ...ids]).catch((e) => {
+  if ((await currentStopEpoch()) !== myEpoch) return
+  const swept = await closeBingRewardsTabs([finishTabId, ...ids], myEpoch).catch((e) => {
     console.warn('Routine: the Bing tab sweep failed:', e)
     return 0
   })
+  if ((await currentStopEpoch()) !== myEpoch) return
 
   if (!ids.length) {
     if (swept) await setLastTabAction(`Closed ${swept} leftover Bing tab(s) after the routine`, true)
@@ -728,6 +825,7 @@ async function verifyAndFinishRoutine(): Promise<void> {
   }
 
   const settings = await getSettings()
+  if ((await currentStopEpoch()) !== myEpoch) return
   const graceMs = Math.max(0, Number(settings.tabCloseDelaySec) || 0) * 1000
 
   // Same shape as closeCapturedTabs: credit the visits, keep the worker alive.
@@ -740,7 +838,7 @@ async function verifyAndFinishRoutine(): Promise<void> {
       console.log('Routine tab sweep skipped: stopped during the grace period.')
       return
     }
-    const closed = await closeTabs(ids, settings.keepPinnedTabs)
+    const closed = await closeTabs(ids, settings.keepPinnedTabs, myEpoch)
     // One line for both halves of the sweep: the strays done above and the
     // routine's own tabs here. They are disjoint — the strays were spared
     // `ids` — so the sum is the count of tabs the finish actually closed.

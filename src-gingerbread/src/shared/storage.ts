@@ -251,6 +251,9 @@ export interface RoutineState {
   recoveryProgress?: Record<string, number>
   recovering?: boolean
   ownerUntilAt?: number
+  startedAt?: number
+  historyId?: string
+  recoveryActions?: number
 }
 
 export interface Captures {
@@ -262,11 +265,33 @@ export interface RunState {
   v: 1
   batchSequence?: number
   stopEpoch: number
+  pause?: { requestedAt: number; effectiveAt?: number }
   activity: { label: string } | null
   batch: BatchState | null
   rightSizeRun: RightSizeRun | null
   routine: RoutineState | null
   captures: Captures
+}
+
+export type RunOutcome = 'running' | 'completed' | 'incomplete' | 'unknown' | 'cancelled'
+export interface RunEvent {
+  at: number
+  step: string
+  outcome: string
+  detail: string
+  durationMs?: number
+}
+export interface RunRecord {
+  id: string
+  source: string
+  startedAt: number
+  endedAt?: number
+  status: RunOutcome
+  steps: string[]
+  events: RunEvent[]
+  beforePoints?: number
+  afterPoints?: number
+  detail?: string
 }
 
 // ---------- key names ----------
@@ -294,6 +319,10 @@ export const KEYS = {
   lastOrders: 'lastOrders',
   lastOrdersLog: 'lastOrdersLog',
   dashLayout: 'dashLayout',
+  runHistory: 'runHistory',
+  activeRun: 'activeRun',
+  postponedRoutine: 'postponedRoutine',
+  restockNotifiedAt: 'restockNotifiedAt',
 } as const
 
 // ---------- typed storage.local helpers ----------

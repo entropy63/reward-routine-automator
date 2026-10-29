@@ -7,12 +7,13 @@ import { DEFAULT_SETTINGS } from '../src/shared/settings.ts'
 import { STEP_DONE_CHECKS, statsAreCurrent, stepSkipReason } from '../src/background/pure/verdicts.ts'
 import { planRoutineRecovery } from '../src/background/pure/routine-recovery.ts'
 import { slotMissingDefaults } from '../src/background/pure/orders.ts'
+import { remainingSteps } from '../src/background/pure/remaining.ts'
 
 function makeStats(search = '57/60', image = '0/1') {
   return { at: Date.now(), searchPoints: search, readyToClaim: '0', activities: { visualSearch: image, dailySet: '3/3' } }
 }
 
-function harness(options: { enabled?: string[]; readings?: ReturnType<typeof makeStats>[]; stopDuringRead?: boolean; readFails?: boolean; deferConfirm?: boolean } = {}) {
+function harness(options: { enabled?: string[]; readings?: ReturnType<typeof makeStats>[]; stopDuringRead?: boolean; readFails?: boolean; deferConfirm?: boolean; pauseDuringImage?: boolean } = {}) {
   let stored: any = {
     v: 1, stopEpoch: 0, activity: null, batch: null, rightSizeRun: null,
     captures: { capturing: [], opened: {} },
@@ -33,15 +34,19 @@ function harness(options: { enabled?: string[]; readings?: ReturnType<typeof mak
   const timers: Array<() => void> = []
   let completeConfirm: (() => void) | undefined
   const notes: string[] = []
+  const finishedRuns: string[] = []
   const data: Record<string, unknown> = {}
   const alarms = new Set<string>()
   const context = createContext({
     console, structuredClone, Date, URLSearchParams,
-    KEYS: { runState: 'runState', lastStats: 'lastStats', lastRoutineDay: 'lastRoutineDay' },
+    KEYS: { runState: 'runState', lastStats: 'lastStats', lastRoutineDay: 'lastRoutineDay', postponedRoutine: 'postponedRoutine' },
     chrome: {
       storage: { local: {
         get: async () => ({ runState: structuredClone(stored) }),
-        set: async (value: any) => { stored = structuredClone(value.runState) },
+        set: async (value: any) => {
+          if ('runState' in value) stored = structuredClone(value.runState)
+          for (const [key, entry] of Object.entries(value)) if (key !== 'runState') data[key] = structuredClone(entry)
+        },
       } },
       alarms: {
         create: async (name: string) => { alarms.add(name) },
@@ -62,7 +67,10 @@ function harness(options: { enabled?: string[]; readings?: ReturnType<typeof mak
       runtime: { getURL: (p: string) => `chrome-extension://fixture/${p}` },
     },
     localDayKey: () => '2026-10-27',
-    getSettings: async () => ({ ...DEFAULT_SETTINGS, tabCloseDelaySec: 0 }),
+    getSettings: async () => ({ ...DEFAULT_SETTINGS, tabCloseDelaySec: 0, ...(options.pauseDuringImage ? {
+      confirmBeforeRoutine: false, statsStartupEnabled: false, dailySetStartupEnabled: false, keepEarningStartupEnabled: false,
+      startupOrder: ['imageSearch', 'search', 'claim'],
+    } : {}) }),
     holdKeepAlive() {}, releaseKeepAlive() {}, sleep: async () => {},
     closeTabs: async () => { sweeps++; return 1 },
     closeOtherDashboardTabs: async () => {}, closeBingRewardsTabs: async () => 0,
@@ -70,7 +78,9 @@ function harness(options: { enabled?: string[]; readings?: ReturnType<typeof mak
     setLastRewards: async () => {}, reportImageSearch: async () => {},
     setLocal: async (key: string, value: unknown) => { data[key] = value },
     getLocal: async (key: string) => key === 'lastStats' ? stats : data[key],
-    slotMissingDefaults, STEP_DONE_CHECKS, statsAreCurrent, stepSkipReason, planRoutineRecovery,
+    slotMissingDefaults, STEP_DONE_CHECKS, statsAreCurrent, stepSkipReason, planRoutineRecovery, remainingSteps,
+    inQuietHours: () => false, quietHoursEndAt: () => null,
+    invalidateStatsEvidence() {}, startRunRecord: async () => 'fixture', recordRunEvent: async () => {}, finishRunRecord: async (_id: string, status: string) => { finishedRuns.push(status) },
     refreshStats: async () => {
       if (options.readFails) return
       const next = options.readings?.[reads] || options.readings?.at(-1) || makeStats()
@@ -79,9 +89,9 @@ function harness(options: { enabled?: string[]; readings?: ReturnType<typeof mak
     },
     checkRedeemAvailability: async () => {}, runStartupClaim: async () => {},
     openDailySetOnRewardsDashboard: async () => {}, openKeepEarningActivities: async () => {},
-    runRandomImageSearch: async () => { images++ },
-    startSearchBatch: async (value: any) => {
-      searches.push(value); stored.batch = { runId: 1, remaining: value.count, tabId: 7, nextRunAt: 0 }
+    runRandomImageSearch: async () => { images++; if (options.pauseDuringImage) await runInContext('requestPause()', context) },
+    startSearchBatch: async (value: any = {}) => {
+      searches.push(value); stored.batch = { runId: 1, remaining: value.count || 1, tabId: 7, nextRunAt: 0 }
     },
     setTimeout: (callback: () => void) => { timers.push(callback); return timers.length },
   })
@@ -93,7 +103,7 @@ function harness(options: { enabled?: string[]; readings?: ReturnType<typeof mak
     runInContext(script, context, { filename: file })
   }
   return {
-    searches, created, removed, data, notes, alarms, windows, removedWindows,
+    searches, created, removed, data, notes, alarms, windows, removedWindows, finishedRuns,
     timeout: () => timers[0](),
     completeConfirm: () => completeConfirm?.(),
     stored: () => stored,
@@ -265,4 +275,112 @@ test('Stop during interrupted-original recovery leaves the day unmarked and neve
   assert.equal(h.images(), 0)
   assert.equal(h.data.lastRoutineDay, undefined)
   assert.equal(h.created.length, 0)
+})
+
+test('an original queue paused before search resumes immediately with the search and tail intact', async () => {
+  const h = harness({ pauseDuringImage: true, readings: [makeStats(), makeStats('57/60', '1/1'), makeStats('60/60', '1/1'), makeStats('60/60', '1/1')] })
+  h.stored().routine = null
+  await h.call('runStartupSequence({manual:true})')
+  assert.equal(h.images(), 1)
+  assert.equal(h.searches.length, 0)
+  assert.ok(h.stored().pause.effectiveAt)
+  assert.equal(h.stored().routine.recovering, true)
+  assert.deepEqual(Array.from(h.stored().routine.pendingSteps), ['search', 'claim'])
+  await h.call('clearPause()')
+  await h.resume()
+  assert.equal(h.searches.length, 1)
+  assert.deepEqual(Array.from(h.stored().routine.pendingSteps), ['claim'])
+  h.endSearch()
+  await h.tail()
+  assert.equal(h.stored().routine, null)
+  assert.equal(h.searches.length, 1)
+  assert.equal(h.images(), 1)
+})
+
+test('pausing at final verification persists its owner and resumes without lease expiry', async () => {
+  const h = harness({ readings: [makeStats('60/60', '1/1')] })
+  h.stored().pause = { requestedAt: Date.now() }
+  await h.finish()
+  assert.ok(h.stored().pause.effectiveAt)
+  assert.equal(h.stored().routine.recovering, true)
+  assert.equal(h.created.length, 0)
+  await h.call('clearPause()')
+  await h.resume()
+  assert.equal(h.stored().routine, null)
+  assert.equal(h.created.length, 1)
+})
+
+test('Stop during preparation settings read never resurrects a routine', async () => {
+  const h = harness()
+  h.stored().routine = null
+  await h.call('const savedSettings = getSettings; getSettings = async () => { await stopAllActivity(); return savedSettings() }')
+  assert.equal(await h.call('runStartupSequence({scheduled:true})'), 'cancelled')
+  assert.equal(h.stored().routine, null)
+  assert.equal(h.created.length, 0)
+  assert.equal(h.windows.length, 0)
+})
+
+test('Stop cancels the pending confirmation and releases its preparation owner', async () => {
+  const h = harness()
+  h.stored().routine = null
+  const running = h.call('runStartupSequence({manual:true})')
+  for (let i = 0; i < 50 && !h.windows.length; i++) await Promise.resolve()
+  assert.equal(h.windows.length, 1)
+  await h.call('answerRoutineConfirm(false); stopAllActivity()')
+  assert.equal(await running, 'cancelled')
+  assert.deepEqual(h.removedWindows, [90])
+  assert.equal(h.stored().activity, null)
+  assert.equal(h.searches.length, 0)
+})
+
+test('Stop before the completion commit prevents the day marker and all cleanup', async () => {
+  const h = harness({ readings: [makeStats('60/60', '1/1')] })
+  await h.call('chrome.alarms.clear = async () => { await stopAllActivity(); return true }')
+  await h.finish()
+  assert.equal(h.data.lastRoutineDay, undefined)
+  assert.equal(h.created.length, 0)
+  assert.equal(h.sweeps(), 0)
+})
+
+test('Stop after completion commit suppresses finish presentation and tab cleanup', async () => {
+  const h = harness({ readings: [makeStats('60/60', '1/1')] })
+  await h.call('const savedLocal = getLocal; let readsOfStats = 0; getLocal = async key => { const result = await savedLocal(key); if (key === "lastStats" && ++readsOfStats === 3) await stopAllActivity(); return result }')
+  await h.finish()
+  assert.equal(h.data.lastRoutineDay, '2026-10-27')
+  assert.equal(h.created.length, 0)
+  assert.equal(h.sweeps(), 0)
+  assert.equal(h.stored().activity, null)
+})
+
+test('finishing activity owns the interval after consuming the routine', async () => {
+  const h = harness({ readings: [makeStats('60/60', '1/1')] })
+  await h.call('const savedLocal = getLocal; let readsOfStats = 0; let denied = false; getLocal = async key => { const result = await savedLocal(key); if (key === "lastStats" && ++readsOfStats === 2) { try { await beginActivity("Other task") } catch { denied = true } } return result }')
+  await h.finish()
+  assert.equal(await h.call('denied'), true)
+  assert.equal(h.stored().activity, null)
+})
+
+test('quiet startup defers automatically and explicit postponement gates another startup', async () => {
+  const h = harness()
+  h.stored().routine = null
+  await h.call('quietHoursEndAt = () => Date.now() + 60000')
+  assert.equal(await h.call('runStartupSequence({scheduled:true})'), 'quiet-hours')
+  assert.equal((h.data.postponedRoutine as any).source, 'startup')
+  await h.call('quietHoursEndAt = () => null')
+  assert.equal(await h.call('runStartupSequence({scheduled:true})'), 'postponed')
+  assert.equal(h.created.length, 0)
+})
+
+test('run history evaluates enabled automation independently of the phone app check-in', async () => {
+  const complete = { ...makeStats('60/60', '1/1'), activities: { ...makeStats().activities, visualSearch: '1/1', bingApp: '0/1' } }
+  const h = harness({ readings: [complete] })
+  h.stored().routine.historyId = 'fixture'
+  await h.finish()
+  assert.deepEqual(h.finishedRuns, ['completed'])
+  assert.match(h.created[0].url, /bingApp/)
+  const unknown = harness({ enabled: ['claim'], readings: [{ ...complete, readyToClaim: '' }] })
+  unknown.stored().routine.historyId = 'fixture'
+  await unknown.finish()
+  assert.deepEqual(unknown.finishedRuns, ['unknown'])
+  assert.match(unknown.created[0].url, /claim/)
 })

@@ -51,7 +51,10 @@ test('restore stores recovery first, excludes unchecked orders and rolls back pa
   let fail = true
   const previousChrome = globalThis.chrome
   const previousNavigator = Object.getOwnPropertyDescriptor(globalThis, 'navigator')
-  Object.defineProperty(globalThis, 'navigator', { configurable: true, value: { locks: { request: async (_: string, fn: () => Promise<void>) => fn() } } })
+  Object.defineProperty(globalThis, 'navigator', { configurable: true, value: { locks: {
+    request: async (_: string, optionsOrWork: unknown, work?: (lock: object) => Promise<void>) =>
+      typeof optionsOrWork === 'function' ? optionsOrWork() : work!({ name: _ }),
+  } } })
   globalThis.chrome = {
     runtime: { getManifest: () => ({ version: '6.9.11' }) },
     storage: {

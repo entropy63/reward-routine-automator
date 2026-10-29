@@ -1,6 +1,7 @@
 import { DEFAULT_SETTINGS } from './settings.ts'
 import type { Settings } from './settings.ts'
 import { validateSettings } from './settings-validation.ts'
+import { withActivityLock } from './activity-lock.ts'
 
 export const BACKUP_LIMIT_BYTES = 2 * 1024 * 1024
 export const BACKUP_KEYS = ['pointsHistory', 'redeemHistory', 'dashLayout', 'recentQueries', 'runHistory'] as const
@@ -18,7 +19,7 @@ const plain = (value: unknown): value is Data => value !== null && typeof value 
 const finite = (value: unknown) => typeof value === 'number' && Number.isFinite(value)
 const shortString = (value: unknown, max = 2000) => typeof value === 'string' && value.length <= max
 const STEPS = ['stats', 'claim', 'dailySet', 'keepEarning', 'search', 'imageSearch']
-const OUTCOMES = ['started', 'skipped', 'paused', 'resumed', 'action-finished', 'failed', 'completed', 'incomplete', 'unknown', 'cancelled']
+const OUTCOMES = ['started', 'skipped', 'paused', 'resumed', 'action-finished', 'failed', 'completed', 'incomplete', 'unknown', 'cancelled', 'retry', 'submitted', 'observed']
 const storedSettings = (value: unknown): Data => {
   if (value === undefined) return {}
   if (!plain(value)) throw new Error('Saved settings could not be read safely. Try again before restoring.')
@@ -37,7 +38,7 @@ function validateData(key: string, value: unknown): void {
   } else if (key === 'redeemHistory') {
     if (!list || list.length > 500 || !list.every((v) => plain(v) && finite(v.at) && shortString(v.day, 10) && shortString(v.label, 200) && typeof v.available === 'boolean')) throw new Error('Invalid stock history.')
   } else if (key === 'runHistory') {
-    if (!list || list.length > 30 || !list.every((v) => plain(v) && shortString(v.id, 100) && finite(v.startedAt) && (v.endedAt == null || finite(v.endedAt)) && ['startup', 'scheduled', 'manual', 'remaining-work'].includes(String(v.source)) && Array.isArray(v.events) && v.events.length <= 100 && v.events.every((event) => plain(event) && finite(event.at) && [...STEPS, 'routine'].includes(String(event.step)) && OUTCOMES.includes(String(event.outcome)) && shortString(event.detail, 240) && (event.durationMs == null || finite(event.durationMs))) && Array.isArray(v.steps) && v.steps.length <= 30 && v.steps.every((step) => STEPS.includes(String(step))) && ['running', 'completed', 'incomplete', 'unknown', 'cancelled'].includes(String(v.status)) && (v.detail == null || shortString(v.detail, 240)) && (v.beforePoints == null || finite(v.beforePoints)) && (v.afterPoints == null || finite(v.afterPoints)))) throw new Error('Invalid routine history.')
+    if (!list || list.length > 30 || !list.every((v) => plain(v) && shortString(v.id, 100) && finite(v.startedAt) && (v.endedAt == null || finite(v.endedAt)) && ['startup', 'scheduled', 'manual', 'remaining-work'].includes(String(v.source)) && Array.isArray(v.events) && v.events.length <= 100 && v.events.every((event) => plain(event) && finite(event.at) && [...STEPS, 'routine', 'stats/full', 'stats/search'].includes(String(event.step)) && OUTCOMES.includes(String(event.outcome)) && shortString(event.detail, 240) && (event.durationMs == null || finite(event.durationMs))) && Array.isArray(v.steps) && v.steps.length <= 30 && v.steps.every((step) => STEPS.includes(String(step))) && ['running', 'completed', 'incomplete', 'unknown', 'cancelled'].includes(String(v.status)) && (v.detail == null || shortString(v.detail, 240)) && (v.beforePoints == null || finite(v.beforePoints)) && (v.afterPoints == null || finite(v.afterPoints)))) throw new Error('Invalid routine history.')
   } else if (key === 'lastOrders') {
     if (!plain(value) || !finite(value.at) || !finite(value.total) || !Array.isArray(value.orders) || value.orders.length > 1000 || !value.orders.every((v) => plain(v) && shortString(v.title) && ['points', 'date', 'orderNo', 'code', 'expires', 'status'].every((key) => v[key] == null || shortString(v[key])))) throw new Error('Invalid order history.')
   } else if (key === 'dashLayout') {
@@ -135,7 +136,7 @@ export async function readBackup(includeOrders = false): Promise<BackupDocument>
 export async function restoreBackup(backup: BackupDocument, replace: boolean, includeOrders: boolean): Promise<void> {
   // The same cross-page settings lock used by normal saves prevents an import
   // from losing a simultaneous preference edit in another extension surface.
-  await navigator.locks.request('zoomies-settings', async () => {
+  await withActivityLock(() => navigator.locks.request('zoomies-settings', async () => {
     const [sync, local] = await Promise.all([chrome.storage.sync.get('settings'), chrome.storage.local.get([...BACKUP_KEYS, 'lastOrders', 'runState', 'activeRun'])])
     const run = local.runState
     if ((plain(run) && (run.routine || run.batch || run.activity)) || local.activeRun) throw new Error('Stop the current activity before restoring a backup.')
@@ -159,7 +160,7 @@ export async function restoreBackup(backup: BackupDocument, replace: boolean, in
       } catch { throw new Error('Restore failed. A recovery backup is saved; download it before trying again.') }
       throw error
     }
-  })
+  }))
 }
 
 export function downloadBackup(backup: BackupDocument, prefix = 'Gingerbread backup'): void {
