@@ -1381,7 +1381,7 @@ body {
   max-height: calc(100dvh - 48px);
   overflow: auto;
   padding: 20px;
-  border: 1px solid var(--border);
+  border: 1px solid var(--line);
   border-radius: 12px;
   background: var(--bg);
   color: var(--text);
@@ -1398,7 +1398,7 @@ body {
 .dash-controls {
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  gap: 4px;
 }
 /* Denser than the popup's fields — a tile, not a page form. */
 .dash-controls .field {

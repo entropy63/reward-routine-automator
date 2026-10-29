@@ -71,6 +71,16 @@ const { browserOptions, browserName } = require('./browser-fixture.cjs');
     assert.equal(await finish.evaluate(()=>document.activeElement?.textContent),'Close');
     await finish.keyboard.press('Escape');
     assert.equal(await finish.evaluate(()=>document.activeElement?.textContent),'More controls');
+    for (const width of [380,768,1100,1440]) {
+      await finish.setViewportSize({width,height:780});
+      for (const automatic of [true,false]) {
+        await worker.evaluate(async automatic=>{const{settings}=await chrome.storage.sync.get('settings');await chrome.storage.sync.set({settings:{...settings,rightSizeSearchBatch:automatic,experimentalFeatures:true}})},automatic);
+        await controls.getByRole('spinbutton',{name:'Searches per batch',exact:true}).waitFor({state:automatic?'hidden':'visible'});
+        await finish.waitForFunction(()=>{const body=document.querySelector('[data-panel-id="controls"] .dash-panel-body');return body&&body.scrollHeight<=body.clientHeight+1},undefined,{timeout:3000});
+      }
+    }
+    await finish.setViewportSize({width:1100,height:780});
+    await finish.screenshot({path:path.join(output,'dashboard-controls.png')});
     await worker.evaluate(async()=>{const{settings}=await chrome.storage.sync.get('settings');await chrome.storage.sync.set({settings:{...settings,lowPowerMode:true}})});
     await finish.locator('.cursor-glow--rest').waitFor();
     await worker.evaluate(async()=>{const{settings}=await chrome.storage.sync.get('settings');await chrome.storage.sync.set({settings:{...settings,lowPowerMode:false,theme:'nord'}})});

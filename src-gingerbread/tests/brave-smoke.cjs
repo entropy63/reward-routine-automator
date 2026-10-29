@@ -24,11 +24,12 @@ const { browserOptions, browserName, routeExtensionTabs } = require('./browser-f
       await route.fulfill({ contentType: 'text/html', body: '<!doctype html><form id="sb_form" action="/search"><input id="sb_form_q" name="q"><button id="sb_form_go" type="submit">Search</button></form>' });
     });
     const worker = context.serviceWorkers()[0] || await context.waitForEvent('serviceworker', { timeout: 15000 });
+    await worker.evaluate(() => { globalThis.__fixtureStates=[]; chrome.storage.onChanged.addListener((changes,area)=>{if(area==='local'&&changes.runState) globalThis.__fixtureStates.push({at:Date.now(),...changes.runState.newValue})}) });
     stopNavigation = await routeExtensionTabs(worker, context);
     const extensionId = new URL(worker.url()).hostname;
     const control = await context.newPage();
     await control.goto(`chrome-extension://${extensionId}/index.html`);
-    await control.waitForFunction(async () => !!(await chrome.storage.sync.get('settings')).settings);
+    for (let n=0; n<200 && !await control.evaluate(async () => !!(await chrome.storage.sync.get('settings')).settings); n++) await new Promise(resolve=>setTimeout(resolve,25));
     await control.evaluate(async () => {
       const { settings } = await chrome.storage.sync.get('settings');
       await chrome.storage.sync.set({ settings: { ...settings, startupEnabled: false, randomSearchEnabled: false, scheduledRunEnabled: false,
@@ -39,7 +40,11 @@ const { browserOptions, browserName, routeExtensionTabs } = require('./browser-f
     assert.equal(started.ok, true);
     // Admission acknowledges before its asynchronous preparation publishes the
     // durable batch. Observing initial idle is not proof of completion.
-    await control.waitForFunction(async () => Boolean((await chrome.storage.local.get('runState')).runState?.batch), { timeout: 30000 });
+    const preparationDeadline=Date.now()+30000;
+    while (!await control.evaluate(async () => Boolean((await chrome.storage.local.get('runState')).runState?.batch))) {
+      assert.ok(Date.now()<preparationDeadline,'Search preparation must publish a durable batch');
+      await new Promise(resolve=>setTimeout(resolve,25));
+    }
     const until = Date.now() + 90000;
     let finalState;
     while (Date.now() < until) {
@@ -48,6 +53,10 @@ const { browserOptions, browserName, routeExtensionTabs } = require('./browser-f
       await new Promise(resolve => setTimeout(resolve, 250));
     }
     assert.ok(finalState.runState && !finalState.runState.batch, 'batch must terminate within fixture deadline');
+    if (submitted.length !== 2) console.error('Fixture state', JSON.stringify(await worker.evaluate(async () => {
+      const data = await chrome.storage.local.get(['runState','lastTabAction','runHistory','activeRun']);
+      return { ...data, transitions:globalThis.__fixtureStates?.slice(-10) };
+    })));
     assert.equal(submitted.length, 2, 'each confirmed submission must navigate once');
     const tabs = await worker.evaluate(() => chrome.tabs.query({}));
     const searchTab = tabs.find(tab => tab.url?.startsWith('https://www.bing.com/search'));

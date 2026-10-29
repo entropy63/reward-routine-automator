@@ -205,7 +205,7 @@ if (-not $asset) {
 Write-Step "Newest:    $($release.tag_name)  ($($asset.name))"
 
 # --- Download and stage ----------------------------------------------------
-$work = Join-Path $env:TEMP ('gb-update-' + [Guid]::NewGuid().ToString('N'))
+$work = [IO.Path]::GetFullPath((Join-Path $env:TEMP ('gb-update-' + [Guid]::NewGuid().ToString('N'))))
 $zipPath = Join-Path $work 'release.zip'
 $stageDir = Join-Path $work 'stage'
 New-Item -ItemType Directory -Path $work -Force | Out-Null
