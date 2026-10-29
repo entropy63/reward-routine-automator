@@ -15,6 +15,8 @@ function harness(batchExtras: any = {}, stopAtLoad = false, options: any = {}) {
     v: 1, stopEpoch: 0, activity: null, routine: null, rightSizeRun: null,
     captures: { capturing: [], opened: {} },
     batch: options.noBatch ? null : { runId: 1, remaining: 4, tabId: 7, nextRunAt: 0, ...batchExtras },
+    ...(options.routine ? { routine: { startDay: '1970-01-01', pendingSteps: ['claim'], pendingTabs: [], skipped: [], enabledSteps: ['search', 'claim'] } } : {}),
+    ...(options.pauseBeforeStart ? { pause: { requestedAt: time } } : {}),
   }
   const injections: any[] = []
   const navigations: any[] = []
@@ -70,7 +72,10 @@ function harness(batchExtras: any = {}, stopAtLoad = false, options: any = {}) {
     },
     awaitedQuery: async () => { if (options.stopAtQuery) { stored.stopEpoch++; stored.batch = null }; return { query: 'a meaningful query', api: 'fixture' } },
     setLocal: async () => {}, startKeepAlive: () => {}, startQueryPrefetch: () => {}, recordSubmittedQuery: async () => {},
-    getSettings: async () => ({ minDelaySec: 5, maxDelaySec: 15, searchesPerBatch: 4, rightSizeSearchBatch: false }),
+    getSettings: async () => {
+      if (options.stopAtSettings) { stored.stopEpoch++; stored.batch = null }
+      return { minDelaySec: 5, maxDelaySec: 15, searchesPerBatch: 4, rightSizeSearchBatch: false }
+    },
     randomDelayMillis: () => 5000,
     scheduleBeat: (delay: number) => { delays.push(delay) },
     cancelBeats: () => {},
@@ -144,6 +149,23 @@ test('pause preserves remaining work at a safe boundary and resume continues it'
   assert.equal(h.injections.length, 1)
   assert.equal(h.state().batch.remaining, 3)
   assert.equal(h.state().pause, undefined)
+})
+
+test('pause while a routine hands off search durably requeues its unstarted step', async () => {
+  const h = harness({}, false, { noBatch: true, routine: true, pauseBeforeStart: true })
+  await h.start()
+  assert.equal(h.state().batch, null)
+  assert.equal(h.created(), 0)
+  assert.equal(h.state().routine.recovering, true)
+  assert.deepEqual(Array.from(h.state().routine.pendingSteps), ['search', 'claim'])
+  assert.ok(h.state().pause.effectiveAt)
+})
+
+test('Stop during initial batch settings read prevents opening or resurrecting a batch', async () => {
+  const h = harness({}, false, { noBatch: true, stopAtSettings: true })
+  await h.start()
+  assert.equal(h.created(), 0)
+  assert.equal(h.state().batch, null)
 })
 
 test('stopping while the page loads prevents typing and rescheduling', async () => {

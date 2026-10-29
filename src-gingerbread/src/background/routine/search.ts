@@ -47,6 +47,19 @@ const FRESH_AT_WINDOW_MS = 120000
 let startingBatch: Promise<void> | null = null
 let finishingBatch = false
 
+async function pauseSearchSetup(epoch: number): Promise<boolean> {
+  if (!(await pauseBoundary())) return false
+  // A routine may already have shifted search out of its queue when the
+  // request arrives. Before acknowledging setup, put the unstarted step back
+  // durably so Resume has work to hand off rather than waiting for a lease.
+  await updateRunState(state => {
+    if (state.stopEpoch !== epoch || !state.pause || !state.routine || state.batch) return
+    state.routine.pendingSteps = ['search', ...state.routine.pendingSteps.filter(step => step !== 'search')]
+    state.routine.recovering = true
+  })
+  return true
+}
+
 export function startSearchBatch(opts: { count?: number; prowl?: boolean; continuation?: boolean } = {}): Promise<void> {
   if (finishingBatch && !opts.continuation) return Promise.resolve()
   if (startingBatch) return startingBatch
@@ -56,19 +69,20 @@ export function startSearchBatch(opts: { count?: number; prowl?: boolean; contin
 
 async function startBatch(opts: { count?: number; prowl?: boolean; continuation?: boolean }): Promise<void> {
   const running = await readRunState()
+  const myEpoch = running.stopEpoch
   if (finishingBatch && !opts.continuation) return
   if (running.batch && !opts.continuation) return
-  if (await pauseBoundary()) return
+  if (await currentStopEpoch() !== myEpoch) return
+  if (!opts.continuation && await pauseSearchSetup(running.stopEpoch)) return
   cancelBeats()
 
   // Stop checkpoint, covering both callers: a stop landing between the
   // routine's own checkpoint (or the popup's click) and the batch write below
   // would otherwise resurrect a batch the user just stopped. The epoch is
   // stable across the setup awaits unless a stop actually happened.
-  const myEpoch = await currentStopEpoch()
-
   const settings = await getSettings()
   const previous = await readRunState()
+  if (previous.stopEpoch !== myEpoch) return
   const perBatch = Math.max(1, opts.count ?? (Math.floor(settings.searchesPerBatch) || 1))
 
   // Right-sizing: a FRESH read first — the user's spec is 'check how many
@@ -103,6 +117,7 @@ async function startBatch(opts: { count?: number; prowl?: boolean; continuation?
   }
 
   const { count: batchCount, pair, trimmed } = sized
+  if (!opts.continuation && await pauseSearchSetup(myEpoch)) return
   if (trimmed && pair) {
     // The search step owns no Activity row, so its news rides the Tabs row —
     // the same row its skip note lands in.
@@ -365,6 +380,9 @@ export async function tick(): Promise<void> {
     if (remaining < 0) return
     if (state.routine?.historyId) await withDeadline(recordRunEvent(state.routine.historyId, 'search', 'submitted',
       `Results navigation confirmed; ${remaining} submissions remaining`, Date.now() - attemptStartedAt), 2000, 'Search submission trace').catch(console.warn)
+    // The current effect is committed now. A pause need not sit through the
+    // inter-search delay before it can acknowledge this safe boundary.
+    if (await pauseBoundary()) { cancelBeats(); return }
     startQueryPrefetch()
     if (remaining === 0) { await finishBatch(batch.prowl === true, runId!); return }
     scheduleBeat(delay, () => { void tick().catch(console.warn) })
