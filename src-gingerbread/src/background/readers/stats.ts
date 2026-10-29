@@ -478,7 +478,7 @@ async function collectStats(scope: 'full' | 'search', publish: (stats: Stats, ep
     try {
       if (ownTabIds.length && !(await stopped())) {
         const settings = await withDeadline(getSettings(), 2000, 'Stats cleanup settings')
-        const closed = await withDeadline(closeTabs(ownTabIds, settings.keepPinnedTabs), 5000, 'Stats tab cleanup')
+        const closed = await withDeadline(closeTabs(ownTabIds, settings.keepPinnedTabs, myEpoch ?? undefined), 5000, 'Stats tab cleanup')
         if (closed) console.log(`Closed ${closed} tab(s) opened by "stats".`)
       }
     } catch (e) {

@@ -152,11 +152,12 @@ export async function ensureBingTab(existingTabId: number | null, _background = 
 // The window ids are handed in from closeTabs()'s own tabs.get pass —
 // re-fetching every tab here would double the round trips for no new
 // information.
-async function keepWindowsAlive(closingIds: number[], windowIds: Iterable<number>): Promise<void> {
+async function keepWindowsAlive(closingIds: number[], windowIds: Iterable<number>, expectedEpoch?: number): Promise<void> {
   const closing = new Set(closingIds)
 
   for (const windowId of windowIds) {
     const tabs = await chrome.tabs.query({ windowId })
+    if (!(await cleanupEpochMatches(expectedEpoch))) return
     if (tabs.length && tabs.every((tab) => closing.has(tab.id as number))) {
       // Only the user's own normal windows are worth keeping alive. A window
       // the extension itself created to host one read tab is allowed to close
@@ -168,12 +169,18 @@ async function keepWindowsAlive(closingIds: number[], windowIds: Iterable<number
       } catch {
         continue // the window is already going away
       }
+      if (!(await cleanupEpochMatches(expectedEpoch))) return
       await chrome.tabs.create({ windowId })
     }
   }
 }
 
-export async function closeTabs(ids: Array<number | null | undefined>, keepPinned: boolean): Promise<number> {
+async function cleanupEpochMatches(expectedEpoch?: number): Promise<boolean> {
+  return expectedEpoch == null || await currentStopEpoch() === expectedEpoch
+}
+
+export async function closeTabs(ids: Array<number | null | undefined>, keepPinned: boolean, expectedEpoch?: number): Promise<number> {
+  if (!(await cleanupEpochMatches(expectedEpoch))) return 0
   const unique = [...new Set(ids.filter((id): id is number => typeof id === 'number'))]
   const closable: number[] = []
   const windowIds = new Set<number>()
@@ -181,6 +188,7 @@ export async function closeTabs(ids: Array<number | null | undefined>, keepPinne
   for (const id of unique) {
     try {
       const tab = await chrome.tabs.get(id)
+      if (!(await cleanupEpochMatches(expectedEpoch))) return 0
       // One round trip feeds both filters: pinned here, the window sweep above.
       if (keepPinned && tab.pinned) continue
       closable.push(id)
@@ -192,7 +200,8 @@ export async function closeTabs(ids: Array<number | null | undefined>, keepPinne
 
   if (!closable.length) return 0
 
-  await keepWindowsAlive(closable, windowIds)
+  await keepWindowsAlive(closable, windowIds, expectedEpoch)
+  if (!(await cleanupEpochMatches(expectedEpoch))) return 0
   try {
     await chrome.tabs.remove(closable)
   } catch (e) {
@@ -242,7 +251,7 @@ export async function closeCapturedTabs(stepId: StepId, enabledKey: keyof Settin
       console.log(`Tab close for "${stepId}" skipped: stopped during the grace period.`)
       return 0
     }
-    const closed = await closeTabs(ids, settings.keepPinnedTabs)
+    const closed = await closeTabs(ids, settings.keepPinnedTabs, myEpoch)
     if (closed) {
       console.log(`Closed ${closed} tab(s) opened by "${stepId}".`)
       await setLastTabAction(`Closed ${closed} tab(s) after the ${STEP_LABEL[stepId] || stepId}`, true)
@@ -282,7 +291,8 @@ function isDashboardTab(tab: chrome.tabs.Tab): boolean {
 // window, since a prior run's dashboard may sit in another window; the just-
 // opened tab is spared by id. Best-effort: a routine never fails because a
 // stale tab could not be enumerated or closed.
-export async function closeOtherDashboardTabs(keepTabId: number | null): Promise<number> {
+export async function closeOtherDashboardTabs(keepTabId: number | null, expectedEpoch?: number): Promise<number> {
+  if (!(await cleanupEpochMatches(expectedEpoch))) return 0
   let tabs: chrome.tabs.Tab[]
   try {
     tabs = await chrome.tabs.query({})
@@ -295,7 +305,7 @@ export async function closeOtherDashboardTabs(keepTabId: number | null): Promise
     .filter(isDashboardTab)
     .map((tab) => tab.id)
     .filter((id): id is number => typeof id === 'number')
-  if (!doomed.length) return 0
+  if (!doomed.length || !(await cleanupEpochMatches(expectedEpoch))) return 0
   try {
     await chrome.tabs.remove(doomed)
   } catch (e) {
@@ -315,7 +325,8 @@ export async function closeOtherDashboardTabs(keepTabId: number | null): Promise
 //
 // Best-effort exactly like that sibling: a tab that cannot be enumerated or
 // closed never fails the routine.
-export async function closeBingRewardsTabs(keepIds: Array<number | null | undefined>): Promise<number> {
+export async function closeBingRewardsTabs(keepIds: Array<number | null | undefined>, expectedEpoch?: number): Promise<number> {
+  if (!(await cleanupEpochMatches(expectedEpoch))) return 0
   let tabs: chrome.tabs.Tab[]
   try {
     tabs = await chrome.tabs.query({})
@@ -336,7 +347,7 @@ export async function closeBingRewardsTabs(keepIds: Array<number | null | undefi
     keepPinned: settings.keepPinnedTabs,
     dashboardMatch: DASHBOARD_URL,
   })
-  if (!doomed.length) return 0
+  if (!doomed.length || !(await cleanupEpochMatches(expectedEpoch))) return 0
 
   // The hazard closeTabs() already guards against, and the reason it is worth
   // guarding here: removing every tab in a window closes the window with it, so
@@ -349,11 +360,12 @@ export async function closeBingRewardsTabs(keepIds: Array<number | null | undefi
     tabs.filter((tab) => tab.id != null && closing.has(tab.id)).map((tab) => tab.windowId),
   )
   try {
-    await keepWindowsAlive(doomed, windowIds)
+    await keepWindowsAlive(doomed, windowIds, expectedEpoch)
   } catch (e) {
     console.warn('Finish: the window guard failed:', e)
   }
 
+  if (!(await cleanupEpochMatches(expectedEpoch))) return 0
   try {
     await chrome.tabs.remove(doomed)
   } catch (e) {

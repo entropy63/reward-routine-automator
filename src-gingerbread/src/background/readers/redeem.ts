@@ -340,7 +340,7 @@ async function collectRedeemAvailability(): Promise<void> {
     try {
       if (redeemTabId != null && !(await stopped())) {
         const settings = await withDeadline(getSettings(), 2000, 'Catalog cleanup settings')
-        const closed = await withDeadline(closeTabs([redeemTabId], settings.keepPinnedTabs), 5000, 'Catalog tab cleanup')
+        const closed = await withDeadline(closeTabs([redeemTabId], settings.keepPinnedTabs, myEpoch ?? undefined), 5000, 'Catalog tab cleanup')
         if (closed) console.log('Closed the tab opened by "redeem".')
       }
     } catch (error) { console.warn('Catalog cleanup failed:', error) }

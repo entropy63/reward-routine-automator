@@ -144,7 +144,7 @@ export async function runManualClaim(): Promise<void> {
         if (await stopped()) {
           console.log('Claim: stopped during the settle wait; tab left open.')
         } else {
-          const closed = await closeTabs(ids, settings.keepPinnedTabs)
+          const closed = await closeTabs(ids, settings.keepPinnedTabs, myEpoch)
           if (closed) console.log(`Closed ${closed} tab(s) opened by "claim".`)
         }
       } finally {
