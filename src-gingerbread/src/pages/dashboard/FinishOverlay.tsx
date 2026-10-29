@@ -17,6 +17,7 @@ import type { BackgroundStyle, StepId } from '../../shared/settings.ts'
 import { Background } from '../../popup/fx/Background.tsx'
 import { Confetti } from '../../popup/fx/Confetti.tsx'
 import { RestartIcon } from '../../popup/components/icons.tsx'
+import { RewardsLink } from '../../popup/components/RewardsLink.tsx'
 import { usePendingUpdate } from '../../popup/hooks/usePendingUpdate.ts'
 
 // The ?q= summary is keyed by Activities keys (the streaks the user finishes),
@@ -115,7 +116,7 @@ export function FinishOverlay({
       onKeyDown={(event) => {
         if (event.key === 'Escape') { event.preventDefault(); done(); return }
         if (event.key !== 'Tab') return
-        const controls = Array.from(dialog.current?.querySelectorAll<HTMLButtonElement>('button:not(:disabled)') || [])
+        const controls = Array.from(dialog.current?.querySelectorAll<HTMLElement>('button:not(:disabled), a[href]') || [])
         const first = controls[0]
         const last = controls.at(-1)
         if (event.shiftKey && document.activeElement === first) { event.preventDefault(); last?.focus() }
@@ -172,6 +173,7 @@ export function FinishOverlay({
         )}
 
         <div className="finish-actions">
+          <RewardsLink label className="finish-rewards" />
           {/* The Restart control (6.9.8), the only thing on this screen that is
            * about the extension rather than the run. It appears only while an
            * update is sitting on disk unloaded — see usePendingUpdate — and

@@ -44,6 +44,12 @@ export const ActivityIcon = (p: IconProps) => (
   </svg>
 )
 
+export const RewardsIcon = (p: IconProps) => (
+  <svg {...base(p)}>
+    <path d="M8 3h8v6a4 4 0 0 1-8 0V3ZM8 5H5v3a3 3 0 0 0 3 3m8-6h3v3a3 3 0 0 1-3 3M12 13v7M8 21h8" />
+  </svg>
+)
+
 export const RefreshIcon = (p: IconProps) => (
   <svg {...base(p)}>
     <path d="M20 11a8 8 0 1 0-.9 4" />

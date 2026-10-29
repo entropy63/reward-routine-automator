@@ -1269,6 +1269,7 @@ body {
   right: 18px;
   z-index: 5;
 }
+.dash-rewards { position: fixed; top: 14px; left: 18px; z-index: 5; }
 /* The settings surface: the popup's own Settings component (same rows, same
  * storage), distributed across the full width — the cards flow into columns
  * so the screen is used evenly (user request: "well distributed on the
@@ -1593,9 +1594,11 @@ body {
 }
 .finish-actions {
   display: flex;
+  flex-wrap: wrap;
   gap: 10px;
   margin-top: 22px;
 }
+.finish-rewards { padding: 12px; font-size: 14px; }
 .finish-done {
   flex: 1;
   padding: 12px 16px;

@@ -9,6 +9,8 @@ import { useMotionEnabled } from '../../popup/fx/motion-presets.ts'
 import { StorageGate } from '../../popup/components/StorageGate.tsx'
 import { ViewBoundary } from '../../popup/components/ViewBoundary.tsx'
 import { GearIcon } from '../../popup/components/icons.tsx'
+import { RewardsLink } from '../../popup/components/RewardsLink.tsx'
+import { NotificationCard } from '../../popup/components/NotificationCard.tsx'
 import { DashboardCtx } from './ctx.tsx'
 import type { DashboardWiring } from './ctx.tsx'
 import { FinishOverlay, readFinishSummary } from './FinishOverlay.tsx'
@@ -100,7 +102,8 @@ function DashboardPage() {
   return (
     <div className="dash">
       {!finish && <Background style={settings.background} animate={animate} />}
-      {commandError && !finish && <div className="action-feedback action-feedback--dashboard" role="alert"><span>{commandError}</span><button className="icon-btn" onClick={clearError} aria-label="Dismiss action message">×</button></div>}
+      {commandError && !finish && <NotificationCard className="action-feedback action-feedback--dashboard" urgent onDismiss={clearError} dismissLabel="Dismiss action message">{commandError}</NotificationCard>}
+      {!finish && <RewardsLink className="dash-rewards" />}
 
       {/* The gear, pinned top-right over whatever content is showing — the
        * dashboard's own way into its settings surface. */}

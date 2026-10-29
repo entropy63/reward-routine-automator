@@ -133,9 +133,8 @@ export interface CouponsRow {
 }
 
 // One stock-change news record (redeemRestockNews / redeemSoldOutNews): the
-// amounts that flipped direction since the previous read. NOT dismissible —
-// a record clears only when the amount flips back (which moves it into the
-// opposite record).
+// amounts that flipped direction since the previous read. Dismissing its UI
+// notice stores a separate acknowledgement; the observation remains intact.
 export interface StockNews {
   at: number
   labels: string[]

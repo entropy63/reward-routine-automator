@@ -14,6 +14,8 @@ import { useMouseEscape } from './hooks/useMouseEscape.ts'
 import { useMotionEnabled } from './fx/motion-presets.ts'
 import { Background } from './fx/Background.tsx'
 import { Banners } from './components/Banners.tsx'
+import { NotificationCard } from './components/NotificationCard.tsx'
+import { RewardsLink } from './components/RewardsLink.tsx'
 import { Today } from './views/Today.tsx'
 import { Run } from './views/Run.tsx'
 import { BrandMark } from './components/BrandMark.tsx'
@@ -143,6 +145,7 @@ export function App() {
           <span className={`status-pill${status.live ? ' status-pill--live' : ''}`} title={status.label}>
             {status.label}
           </span>
+          <RewardsLink />
           {/* The full-screen dashboard (user request, 2026-09-08): always
            * visible, not dev-gated — it is the extension's analytics surface,
            * the same data the popup shows, at full size. The worker opens it
@@ -225,10 +228,8 @@ export function App() {
       </header>
 
       <main className="stage">
-        {commandError && <div className="action-feedback" role="alert"><span>{commandError}</span><button className="icon-btn" onClick={clearError} aria-label="Dismiss action message">×</button></div>}
-        {/* The banners sit above the stage inside the fixed frame (compact
-         * single-line styling keeps the tabbar visible): the Bing-app warning,
-         * a restock, a newly sold-out amount. src-donut parity — not dismissible. */}
+        {commandError && <NotificationCard className="action-feedback" urgent onDismiss={clearError} dismissLabel="Dismiss action message">{commandError}</NotificationCard>}
+        {/* Compact notices stay independent of the view's width and state. */}
         {!settingsOpen && <Banners stats={stats} preview={bannerPreview} />}
         <ViewBoundary><Suspense fallback={<div className="view-loading" role="status">Opening view…</div>}>
         <AnimatePresence mode="wait">
