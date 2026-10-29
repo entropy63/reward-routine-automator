@@ -1,4 +1,4 @@
-const { chromium } = require('@playwright/test');
+const { chromium, expect } = require('@playwright/test');
 const fs = require('node:fs');
 const path = require('node:path');
 const os = require('node:os');
@@ -30,6 +30,36 @@ const { browserOptions, browserName } = require('./browser-fixture.cjs');
       const until=Date.now()+10000;
       while(Date.now()<until){const state=await worker.evaluate(()=>chrome.storage.local.get(['popupWidgetLayout','dashHiddenWidgets','dashLayout']));if(test(state))return;await new Promise(resolve=>setTimeout(resolve,50))}
       throw Error(message);
+    }
+    async function checkBlur(locator, pixels, surface) {
+      await locator.first().waitFor();
+      await expect.poll(async()=>{
+        const filter=await locator.first().evaluate(element=>getComputedStyle(element).backdropFilter);
+        const match=filter.match(/blur\(([\d.]+)px\)/);
+        return match ? Number(match[1]) : filter==='none' ? 0 : NaN;
+      },{message:`${surface} follows Glass blur`}).toBe(pixels);
+    }
+    async function changeGlassBlur(pixels) {
+      await popup.getByRole('button',{name:'Settings',exact:true}).click();
+      const slider=popup.getByRole('slider',{name:'Glass blur',exact:true});
+      await slider.focus();
+      await slider.press(pixels===30 ? 'End' : 'Home');
+      if(pixels>0&&pixels<30){
+        await popup.waitForFunction(async()=>(await chrome.storage.sync.get('settings')).settings.tileBlur===0);
+        // Hold the arrow key through the local changes, then commit once on
+        // key-up, just as a user adjusting this range with the keyboard can.
+        for(let n=0;n<pixels;n++)await popup.keyboard.down('ArrowRight');
+        await popup.keyboard.up('ArrowRight');
+      }
+      assert.equal(await slider.inputValue(),String(pixels));
+      await popup.waitForFunction(async expected=>(await chrome.storage.sync.get('settings')).settings.tileBlur===expected,pixels);
+      await checkBlur(popup.locator('.topbar'),pixels,'Settings header');
+      await checkBlur(slider.locator('xpath=ancestor::*[contains(concat(" ", normalize-space(@class), " "), " card ")][1]'),pixels,'Settings card');
+      await popup.getByRole('button',{name:'Back',exact:true}).click();
+      await popup.locator('[data-widget-id="balance"] .card').waitFor();
+      await checkBlur(popup.locator('.topbar'),pixels,'Today header');
+      await checkBlur(popup.locator('[data-widget-id="balance"] .card'),pixels,'Today widget');
+      await checkBlur(popup.locator('.tabbar .tab:not(.active)'),pixels,'Navigation button');
     }
     await worker.evaluate(async () => {
       const {settings} = await chrome.storage.sync.get('settings');
@@ -92,6 +122,36 @@ const { browserOptions, browserName } = require('./browser-fixture.cjs');
     assert.equal(await streakWidget.locator('.streak-week').first().getByRole('listitem').count(),7);
     assert.equal(await streakWidget.locator('.streak-week').first().locator('[data-state="completed"]').count(),4);
     assert.equal(await streakWidget.locator('.streak-week').nth(1).locator('[data-state="pending"]').count(),1);
+    assert.equal(await streakWidget.locator('.streak-week-days,.streak-week-note').count(),0,'Streak rails omit visual day numbers and the explanatory footer');
+    assert.match(await streakWidget.getByRole('listitem').first().getAttribute('aria-label'),/Day 1: Completed/,'Segment meaning remains accessible');
+    for(const pixels of [0,8,30])await changeGlassBlur(pixels);
+    const frosted=await popup.locator('[data-widget-id="balance"] .card').evaluate(element=>getComputedStyle(element).backgroundColor);
+    await changeGlassBlur(0);
+    assert.equal(await popup.locator('[data-widget-id="balance"] .card').evaluate(element=>getComputedStyle(element).backgroundColor),'rgba(0, 0, 0, 0)','Zero blur clears widget tint');
+    assert.notEqual(frosted,'rgba(0, 0, 0, 0)','Frosted setting also supplies a translucent tint');
+    await changeGlassBlur(8);
+    await popup.reload();
+    await checkBlur(popup.locator('[data-widget-id="balance"] .card'),8,'Reopened Today widget');
+    await checkBlur(popup.locator('.topbar'),8,'Reopened header');
+    const dock=await popup.locator('.tabbar').evaluate(element=>{const style=getComputedStyle(element);return{background:style.backgroundColor,filter:style.backdropFilter,shadow:style.boxShadow,height:element.getBoundingClientRect().height}});
+    assert.equal(dock.background,'rgba(0, 0, 0, 0)','Navigation has no content-hiding backing panel');
+    assert.equal(dock.filter,'none','Only the navigation buttons frost the backdrop');
+    assert.equal(dock.shadow,'none','Navigation has no full-width backing shadow');
+    assert.ok(dock.height<=56,'Bottom navigation is more compact');
+    const stage=popup.locator('.stage');
+    assert.equal(await stage.evaluate(element=>getComputedStyle(element).scrollbarWidth),'none','Popup scrollbar chrome is hidden');
+    assert.ok(await stage.evaluate(element=>element.scrollHeight>element.clientHeight),'Today still has scrollable content');
+    await stage.evaluate(element=>{element.scrollTop=0});
+    await stage.hover();
+    await popup.mouse.wheel(0,180);
+    await popup.waitForFunction(()=>document.querySelector('.stage').scrollTop>0);
+    await stage.evaluate(element=>{element.scrollTop=0});
+    await stage.focus();
+    await popup.keyboard.press('PageDown');
+    await popup.waitForFunction(()=>document.querySelector('.stage').scrollTop>0);
+    await stage.evaluate(element=>element.blur());
+    await expect(popup.locator('.today-view')).toHaveCSS('opacity','1');
+    await stage.evaluate(element=>{element.scrollTop=0});
     await popup.screenshot({path:path.join(output,'redesigned-popup.png')});
     await popup.getByRole('button',{name:'Edit widgets',exact:true}).click();
     await popup.getByRole('combobox',{name:"Size of Today's streaks",exact:true}).selectOption('compact');
@@ -176,6 +236,9 @@ const { browserOptions, browserName } = require('./browser-fixture.cjs');
     await finish.getByRole('button',{name:'Done',exact:true}).click();
     await finish.locator('.dash-gear').waitFor();
     await finish.locator('.dash-panel').first().waitFor();
+    await checkBlur(finish.locator('.dash-panel'),8,'Dashboard widget');
+    await checkBlur(finish.locator('.dash-edit-bar'),8,'Dashboard controls');
+    assert.equal(await finish.locator('html').evaluate(element=>getComputedStyle(element).scrollbarWidth),'none','Dashboard scrollbar chrome is hidden');
     assert.equal(await finish.evaluate(()=>document.activeElement?.getAttribute('aria-label')),'Settings');
     await checkRewardsLink(finish);
     const controls=finish.locator('[data-panel-id="controls"]');
@@ -219,6 +282,9 @@ const { browserOptions, browserName } = require('./browser-fixture.cjs');
     await finish.screenshot({path:path.join(output,'dashboard-controls.png')});
     await worker.evaluate(async()=>{const{settings}=await chrome.storage.sync.get('settings');await chrome.storage.sync.set({settings:{...settings,lowPowerMode:true}})});
     await finish.locator('.cursor-glow--rest').waitFor();
+    await checkBlur(finish.locator('.dash-panel'),0,'Low-power dashboard widget');
+    await checkBlur(finish.locator('.dash-edit-bar'),0,'Low-power dashboard controls');
+    await checkBlur(popup.locator('.topbar'),0,'Low-power popup header');
     await worker.evaluate(async()=>{const{settings}=await chrome.storage.sync.get('settings');await chrome.storage.sync.set({settings:{...settings,lowPowerMode:false,theme:'nord'}})});
     await finish.locator('.cursor-dot').waitFor();
     assert.equal(await finish.locator('html').getAttribute('data-theme'),'nord');
@@ -246,7 +312,7 @@ const { browserOptions, browserName } = require('./browser-fixture.cjs');
     await finish.getByRole('button',{name:'Run the routine',exact:true}).click();
     await finish.locator('.action-feedback').filter({hasText:'current activity'}).waitFor();
     assert.deepEqual(errors,[]);
-    console.log(JSON.stringify({passed:true,browser:browserName(),version:JSON.parse(fs.readFileSync(path.join(build,'manifest.json'),'utf8')).version,popupWidgetsAddRemoveResize:true,dashboardWidgetsAddRemoveResize:true,emptyLayoutAndReset:true,sevenSegmentEvidence:true,sharedHistory:true,compactDismissibleNotices:true,dismissalsSurviveReopen:true,newNewsAndUpdateReappear:true,previewIsolated:true,rewardsLinksOnAllThreeSurfaces:true,narrowFinishActions:true,backupRoundtrip:true,ordersExcludedByDefault:true,mergePreservesCurrent:true,recoveryBackup:true,oneFinishBackground:true,finishFocusTrap:true,liveLowPower:true,liveTheme:true,reducedMotion:true,hiddenMotionPaused:true,storageErrorRetry:true,commandErrorsVisible:true,output}));
+    console.log(JSON.stringify({passed:true,browser:browserName(),version:JSON.parse(fs.readFileSync(path.join(build,'manifest.json'),'utf8')).version,popupWidgetsAddRemoveResize:true,dashboardWidgetsAddRemoveResize:true,emptyLayoutAndReset:true,sevenSegmentEvidence:true,sharedHistory:true,glassBlurRealSlider:true,compactTransparentDock:true,hiddenScrollbarsRetainScrolling:true,compactDismissibleNotices:true,dismissalsSurviveReopen:true,newNewsAndUpdateReappear:true,previewIsolated:true,rewardsLinksOnAllThreeSurfaces:true,narrowFinishActions:true,backupRoundtrip:true,ordersExcludedByDefault:true,mergePreservesCurrent:true,recoveryBackup:true,oneFinishBackground:true,finishFocusTrap:true,liveLowPower:true,liveTheme:true,reducedMotion:true,hiddenMotionPaused:true,storageErrorRetry:true,commandErrorsVisible:true,output}));
   } finally {
     if(context)await context.close();
     if(!path.resolve(profile).startsWith(path.resolve(os.tmpdir())+path.sep)||!path.basename(profile).startsWith('gingerbread-ui-check-'))throw Error('Unsafe cleanup path');

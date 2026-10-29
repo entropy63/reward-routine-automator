@@ -124,16 +124,15 @@
   min-height: 0;
   overflow-y: auto;
   overflow-x: hidden;
+  scrollbar-width: none;
 }
 .stage::-webkit-scrollbar {
-  width: 10px;
+  display: none;
 }
-.stage::-webkit-scrollbar-thumb {
-  background: color-mix(in srgb, var(--text-faint) 45%, transparent);
-  border-radius: 8px;
-  border: 3px solid transparent;
-  background-clip: padding-box;
-}
+/* Keep wheel, touch and keyboard scrolling without spending layout space on
+ * scrollbar chrome, including nested lists/dialogs and the dashboard page. */
+html, body, .app *, .dash * { scrollbar-width: none; }
+html::-webkit-scrollbar, body::-webkit-scrollbar, .app ::-webkit-scrollbar, .dash ::-webkit-scrollbar { display: none; }
 .view {
   display: flex;
   flex-direction: column;
@@ -1075,16 +1074,16 @@
 
 /* Glossy control chrome floats above quieter, readable content surfaces. */
 :root {
-  --glass-surface: color-mix(in srgb, var(--surface) 80%, transparent);
+  --glass-surface: var(--tile-tint, color-mix(in srgb, var(--surface) 35%, transparent));
   --glass-edge: color-mix(in srgb, var(--text) 16%, transparent);
   --glass-highlight: color-mix(in srgb, var(--text) 12%, transparent);
 }
-.app > .topbar, .app > .tabbar {
+.app > .topbar {
   flex: none;
   margin: 12px;
   border: 1px solid var(--glass-edge);
   background: var(--glass-surface);
-  backdrop-filter: blur(24px) saturate(150%);
+  backdrop-filter: blur(var(--tile-blur, 10px)) saturate(150%);
   box-shadow: inset 0 1px 0 var(--glass-highlight), 0 8px 24px rgb(0 0 0 / 12%);
 }
 .app > .topbar { padding: 10px 12px; border-radius: 20px; gap: 12px; margin-bottom: 0; }
@@ -1098,10 +1097,12 @@
 .topbar-actions { flex: 0 0 auto; max-width: 145px; gap: 4px; }
 .topbar-actions > .icon-btn { width: 29px; height: 29px; border-radius: 10px; }
 .developer-toolbar { display: flex; justify-content: flex-end; flex: 1 0 100%; gap: 4px; border-top: 1px solid var(--line); padding-top: 5px; }
-.app > .tabbar { z-index: 3; display: flex; gap: 4px; padding: 6px; margin-top: 0; border-radius: 22px; }
-.tabbar .tab { position: relative; min-width: 0; min-height: 48px; border-radius: 16px; padding: 7px 6px; gap: 3px; font-size: 10.5px; transition: background 150ms, color 150ms; }
-.tabbar .tab.active { color: var(--accent); background: color-mix(in srgb, var(--accent) 12%, var(--surface)); box-shadow: inset 0 1px 0 var(--glass-highlight); }
-.tabbar .tab-icon { font-size: 18px; }
+/* Only the buttons carry glass. The empty rail lets content pass behind it. */
+.app > .tabbar { position: absolute; inset: auto 20px 10px; z-index: 3; display: flex; gap: 4px; padding: 0; margin: 0; border: 0; background: transparent; backdrop-filter: none; box-shadow: none; }
+.tabbar .tab { position: relative; min-width: 0; min-height: 44px; border: 1px solid var(--glass-edge); border-radius: 14px; padding: 5px 6px; gap: 2px; font-size: 10px; background: var(--glass-surface); backdrop-filter: blur(var(--tile-blur, 10px)) saturate(150%); box-shadow: inset 0 1px 0 var(--glass-highlight); transition: background 150ms, color 150ms; }
+.tabbar .tab.active { color: var(--accent); background: color-mix(in srgb, var(--accent) 12%, var(--glass-surface)); }
+.tabbar .tab-icon { font-size: 16px; }
+.app:has(> .tabbar) .view { padding-bottom: 76px; }
 .card-title { text-transform: none; letter-spacing: 0; font-size: 13px; }
 .today-view { padding: 16px 12px; gap: 12px; }
 .today-toolbar { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
@@ -1112,12 +1113,12 @@
 .today-widget-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; align-items: start; }
 .popup-widget { min-width: 0; grid-column: 1 / -1; }
 .popup-widget--compact { grid-column: auto; }
-.popup-widget .card { margin: 0; padding: 14px; border-radius: 20px; border-color: var(--glass-edge); background: color-mix(in srgb, var(--surface) 93%, transparent); box-shadow: inset 0 1px 0 var(--glass-highlight), 0 5px 18px rgb(0 0 0 / 8%); backdrop-filter: blur(min(var(--tile-blur, 10px), 12px)); }
+.popup-widget .card { margin: 0; padding: 14px; border-radius: 20px; border-color: var(--glass-edge); background: var(--glass-surface); box-shadow: inset 0 1px 0 var(--glass-highlight), 0 5px 18px rgb(0 0 0 / 8%); backdrop-filter: blur(var(--tile-blur, 10px)); }
 .popup-widget .card-head { min-height: 20px; gap: 6px; }
 .popup-widget .hero-value { font-size: 36px; letter-spacing: -0.045em; }
 .popup-widget--compact .hero-value { font-size: 28px; }
 .popup-widget--compact .hero { gap: 8px; }
-.widget-footnote, .streak-week-note { color: var(--text-dim); font-size: 10px; line-height: 1.45; margin-top: 8px !important; }
+.widget-footnote { color: var(--text-dim); font-size: 10px; line-height: 1.45; margin-top: 8px !important; }
 .widget-edit-note { display: flex; justify-content: space-between; align-items: center; gap: 8px; font-size: 10px; color: var(--text-dim); }
 .popup-widget--editing .card { border-style: dashed; border-color: color-mix(in srgb, var(--accent) 50%, var(--line)); }
 .widget-remove { width: 25px; height: 25px; font-size: 14px; }
@@ -1154,7 +1155,6 @@
 .streak-week-segment[data-state='pending'] { background: color-mix(in srgb, var(--warn) 20%, var(--surface)); border-color: var(--warn); color: var(--text); }
 .streak-week-segment[data-state='future'] { opacity: 0.45; }
 .streak-week-segment--current { outline: 1px solid var(--text); outline-offset: 2px; }
-.streak-week-days { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); text-align: center; font-size: 8px; color: var(--text-faint); margin-top: 4px; }
 .weekly-streaks--compact { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
 .weekly-streaks--compact .streak-week-status { display: none; }
 .weekly-streaks--compact .streak-week-head { font-size: 10px; }
@@ -1169,9 +1169,9 @@
 .widget-options label { display: flex; justify-content: space-between; align-items: center; padding: 12px; border: 1px solid var(--line); border-radius: 12px; background: var(--surface); font-size: 12px; cursor: pointer; }
 .widget-options input { width: 16px; height: 16px; accent-color: var(--accent); }
 .visually-hidden { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; border: 0; }
-.app[data-low-power='true'] .topbar, .app[data-low-power='true'] .tabbar, .app[data-low-power='true'] .card,
+.app[data-low-power='true'] .topbar, .app[data-low-power='true'] .tabbar .tab, .app[data-low-power='true'] .card,
 .dash[data-low-power='true'] .dash-panel, .dash[data-low-power='true'] .dash-edit-bar { backdrop-filter: none; background: var(--surface); box-shadow: none; }
 @media (prefers-reduced-transparency: reduce), (prefers-contrast: more) {
-  .app > .topbar, .app > .tabbar, .card, .dash-panel, .dash-edit-bar { backdrop-filter: none !important; background: var(--surface) !important; }
+  .app > .topbar, .tabbar .tab, .card, .dash-panel, .dash-edit-bar { backdrop-filter: none !important; background: var(--surface) !important; }
 }
 @media (prefers-reduced-motion: reduce) { .tabbar .tab { transition: none; } }

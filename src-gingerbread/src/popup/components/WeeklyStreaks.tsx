@@ -17,9 +17,7 @@ export function WeeklyStreaks({ stats, compact = false }: { stats: Stats | null;
             <span className="streak-week-mark" aria-hidden="true">{day.state === 'completed' ? '✓' : day.state === 'pending' ? '•' : day.state === 'unknown' ? '–' : ''}</span>
           </span>)}
         </div>
-        {!compact && <div className="streak-week-days" aria-hidden="true">{week.days.map(day => <span key={day.label}>{week.cycle ? day.label.replace('Day ', '') : day.label.slice(0, 1)}</span>)}</div>}
       </div>
     })}
-    {!compact && <p className="streak-week-note">Outlined segment is today. Empty segments are upcoming; a dash means no verified record.</p>}
   </div>
 }

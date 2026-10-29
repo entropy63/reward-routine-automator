@@ -227,7 +227,7 @@ export function App() {
         </div>
       </header>
 
-      <main className="stage">
+      <main className="stage" tabIndex={0} aria-label="Extension content">
         {commandError && <NotificationCard className="action-feedback" urgent onDismiss={clearError} dismissLabel="Dismiss action message">{commandError}</NotificationCard>}
         {/* Compact notices stay independent of the view's width and state. */}
         {!settingsOpen && <Banners stats={stats} preview={bannerPreview} />}

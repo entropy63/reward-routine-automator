@@ -1534,7 +1534,7 @@ body {
 .finish-rewards { padding: 12px; font-size: 14px; }
 
 /* The board keeps its geometry while the control layer gains a glass surface. */
-.dash-edit-bar { flex-wrap: wrap; justify-content: flex-end; max-width: calc(100vw - 122px); padding: 6px; border: 1px solid var(--glass-edge); border-radius: 17px; background: var(--glass-surface); backdrop-filter: blur(20px) saturate(150%); box-shadow: inset 0 1px 0 var(--glass-highlight); }
+.dash-edit-bar { flex-wrap: wrap; justify-content: flex-end; max-width: calc(100vw - 122px); padding: 6px; border: 1px solid var(--glass-edge); border-radius: 17px; background: var(--glass-surface); backdrop-filter: blur(var(--tile-blur, 10px)) saturate(150%); box-shadow: inset 0 1px 0 var(--glass-highlight); }
 .dash-edit-bar .btn { font-size: 11px; }
 .dash-panel { border-color: var(--glass-edge); box-shadow: inset 0 1px 0 var(--glass-highlight), 0 5px 20px rgb(0 0 0 / 9%); }
 .dash-panel-title { text-transform: none; letter-spacing: 0; font-size: 13px; }
@@ -1542,7 +1542,6 @@ body {
 .dash-widget-size { max-width: 68px; }
 .dash-layout-error { position: fixed; top: 66px; left: 50%; transform: translateX(-50%); z-index: 10; margin: 0; }
 .dash-panel-body > .weekly-streaks { min-height: 0; }
-.dash-panel-body .streak-week-note { margin-top: 0 !important; }
 .dash-panel-body .weekly-streaks--compact { height: 100%; align-content: center; }
 @media (max-width: 600px) { .dash-board--editing { padding-top: 120px; } }
 .finish-done {

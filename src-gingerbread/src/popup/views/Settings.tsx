@@ -190,7 +190,7 @@ export function Settings({
             onCommit={(n) => save({ backgroundBrightness: n })}
           />
         </Row>
-        <Row label="Glass blur" hint="How much the cards frost the backdrop">
+        <Row label="Glass blur" hint="How much cards and navigation frost the backdrop">
           <Slider
             value={settings.tileBlur}
             min={0}
