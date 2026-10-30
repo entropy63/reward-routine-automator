@@ -1079,15 +1079,25 @@ html::-webkit-scrollbar, body::-webkit-scrollbar, .app ::-webkit-scrollbar, .das
   --glass-highlight: color-mix(in srgb, var(--text) 12%, transparent);
 }
 .app > .topbar {
+  position: absolute;
+  inset: 12px 12px auto;
+  z-index: 4;
   flex: none;
-  margin: 12px;
+  margin: 0;
   border: 1px solid var(--glass-edge);
   background: var(--glass-surface);
   backdrop-filter: blur(var(--tile-blur, 10px)) saturate(150%);
   box-shadow: inset 0 1px 0 var(--glass-highlight), 0 8px 24px rgb(0 0 0 / 12%);
 }
 .app > .topbar { padding: 10px 12px; border-radius: 20px; gap: 12px; margin-bottom: 0; }
-.app[data-top-bar-background='false'] > .topbar { background: transparent; backdrop-filter: none; border-color: transparent; box-shadow: none; }
+/* These optional full-width strips block scrolling content. The rounded
+ * header and navigation buttons keep their own glass material either way. */
+.app::before, .app::after { position: absolute; left: 0; right: 0; z-index: 2; background: var(--bg); }
+.app[data-top-bar-background='true']::before { content: ''; top: 0; height: var(--popup-top-clearance, 88px); }
+.app[data-bottom-bar-background='true']::after { content: ''; bottom: 0; height: 64px; }
+.app > .stage { box-sizing: border-box; scroll-padding-top: calc(var(--popup-top-clearance, 88px) + 12px); }
+.app > .stage::before { content: ''; display: block; height: var(--popup-top-clearance, 88px); }
+.app .view { padding-top: 0; }
 .brand { gap: 10px; flex: 1; }
 .brand-glyph { width: 28px; height: 28px; }
 .brand-copy { display: grid; min-width: 0; gap: 2px; }
@@ -1095,7 +1105,7 @@ html::-webkit-scrollbar, body::-webkit-scrollbar, .app ::-webkit-scrollbar, .das
 .brand-copy .status-pill { display: flex; align-items: center; gap: 5px; max-width: 170px; padding: 0; border: 0; background: transparent; font-size: 10px; font-weight: 500; color: var(--text-dim); }
 .brand-copy .status-pill::before { content: ''; flex: none; width: 5px; height: 5px; border-radius: 50%; background: var(--text-faint); }
 .brand-copy .status-pill--live::before { background: var(--ok); }
-.topbar-actions { flex: 0 0 auto; max-width: 145px; gap: 4px; }
+.topbar-actions { flex: 0 0 auto; max-width: 172px; gap: 4px; }
 .topbar-actions > .icon-btn { width: 29px; height: 29px; border-radius: 10px; }
 .developer-toolbar { display: flex; justify-content: flex-end; flex: 1 0 100%; gap: 4px; border-top: 1px solid var(--line); padding-top: 5px; }
 /* Only the buttons carry glass. The empty rail lets content pass behind it. */
@@ -1103,16 +1113,14 @@ html::-webkit-scrollbar, body::-webkit-scrollbar, .app ::-webkit-scrollbar, .das
 .tabbar .tab { position: relative; min-width: 0; min-height: 44px; border: 1px solid var(--glass-edge); border-radius: 14px; padding: 5px 6px; gap: 2px; font-size: 10px; background: var(--glass-surface); backdrop-filter: blur(var(--tile-blur, 10px)) saturate(150%); box-shadow: inset 0 1px 0 var(--glass-highlight); transition: background 150ms, color 150ms; }
 .tabbar .tab.active { color: var(--accent); background: color-mix(in srgb, var(--accent) 12%, var(--glass-surface)); }
 .tabbar .tab-icon { font-size: 16px; }
-.app[data-bottom-bar-background='true'] > .tabbar { border-radius: 14px; background: var(--glass-surface); backdrop-filter: blur(var(--tile-blur, 10px)) saturate(150%); box-shadow: inset 0 0 0 1px var(--glass-edge), 0 5px 18px rgb(0 0 0 / 12%); }
-.app[data-bottom-bar-background='true'] .tabbar .tab { background: transparent; backdrop-filter: none; border-color: transparent; box-shadow: none; }
-.app[data-bottom-bar-background='true'] .tabbar .tab.active { background: color-mix(in srgb, var(--accent) 12%, transparent); }
 .app:has(> .tabbar) .stage { scroll-padding-bottom: 76px; }
 .app:has(> .tabbar) .view { padding-bottom: 76px; }
 .card-title { text-transform: none; letter-spacing: 0; font-size: 13px; }
 .today-view { padding: 16px 12px; gap: 12px; }
 .today-toolbar { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
-.today-toolbar h1 { font-size: 18px; letter-spacing: -0.03em; margin: 0; }
-.today-toolbar > div > span { font-size: 10px; color: var(--text-dim); }
+.app .today-toolbar { position: sticky; top: var(--popup-top-clearance, 88px); z-index: 2; padding: 6px 0; background: var(--bg); }
+.app[data-widget-editing='true'] > .stage { scroll-padding-top: calc(var(--popup-top-clearance, 88px) + 56px); }
+.today-toolbar h1 { font-size: 14px; margin: 0; }
 .today-tools { display: flex; gap: 6px; }
 .today-tools .btn, .widget-edit-note .activity-action { font-size: 10.5px; padding: 5px 8px; }
 .today-widget-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; align-items: start; }
@@ -1174,11 +1182,11 @@ html::-webkit-scrollbar, body::-webkit-scrollbar, .app ::-webkit-scrollbar, .das
 .widget-options label { display: flex; justify-content: space-between; align-items: center; padding: 12px; border: 1px solid var(--line); border-radius: 12px; background: var(--surface); font-size: 12px; cursor: pointer; }
 .widget-options input { width: 16px; height: 16px; accent-color: var(--accent); }
 .visually-hidden { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; border: 0; }
-.app[data-low-power='true'][data-top-bar-background='true'] > .topbar, .app[data-low-power='true'][data-bottom-bar-background='true'] > .tabbar,
+.app[data-low-power='true'] > .topbar,
 .app[data-low-power='true'] .tabbar .tab, .app[data-low-power='true'] .card,
 .dash[data-low-power='true'] .dash-panel, .dash[data-low-power='true'] .dash-edit-bar { backdrop-filter: none; background: var(--surface); box-shadow: none; }
 @media (prefers-reduced-transparency: reduce), (prefers-contrast: more) {
-  .app[data-top-bar-background='true'] > .topbar, .app[data-bottom-bar-background='true'] > .tabbar,
+  .app > .topbar,
   .tabbar .tab, .card, .dash-panel, .dash-edit-bar { backdrop-filter: none !important; background: var(--surface) !important; }
 }
 @media (prefers-reduced-motion: reduce) { .tabbar .tab { transition: none; } }

@@ -126,6 +126,15 @@ export const LayoutDashboardIcon = (p: IconProps) => (
   </svg>
 )
 
+export const WidgetEditIcon = (p: IconProps) => (
+  <svg {...base(p)}>
+    <rect x="3" y="3" width="7" height="7" rx="1.5" />
+    <rect x="14" y="3" width="7" height="7" rx="1.5" />
+    <rect x="3" y="14" width="7" height="7" rx="1.5" />
+    <path d="m14 18 6-6 2 2-6 6-3 1 1-3Z" />
+  </svg>
+)
+
 // The Developer Option banner preview: a bell, for "what the extension can
 // raise at the top".
 export const BellIcon = (p: IconProps) => (

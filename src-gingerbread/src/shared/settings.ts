@@ -111,8 +111,8 @@ export interface Settings {
   background: BackgroundStyle // Popup backdrop style
   backgroundBrightness: number // Backdrop brightness, in % (100 = as drawn)
   tileBlur: number // Glass blur of the cards over the backdrop, in px
-  topBarBackground: boolean // Show the top navigation's shared glass background
-  bottomBarBackground: boolean // Show the bottom navigation's shared glass background
+  topBarBackground: boolean // Block scrolling content behind the floating header
+  bottomBarBackground: boolean // Block scrolling content behind the floating bottom controls
   accentColor: string // Explicit brand color overriding the theme's ("" = theme)
   appearance: Appearance // light/dark/auto
   refreshStatsOnPopupOpen: boolean // Re-read stats on popup open

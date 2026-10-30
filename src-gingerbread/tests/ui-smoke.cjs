@@ -3,6 +3,7 @@ const fs = require('node:fs');
 const path = require('node:path');
 const os = require('node:os');
 const assert = require('node:assert/strict');
+const { inflateSync } = require('node:zlib');
 const { browserOptions, browserName } = require('./browser-fixture.cjs');
 (async () => {
   const profile = fs.mkdtempSync(path.join(os.tmpdir(), 'gingerbread-ui-check-'));
@@ -39,12 +40,105 @@ const { browserOptions, browserName } = require('./browser-fixture.cjs');
         return match ? Number(match[1]) : filter==='none' ? 0 : NaN;
       },{message:`${surface} follows Glass blur`}).toBe(pixels);
     }
-    async function checkHiddenPanel(locator, surface) {
-      await expect(locator).toHaveCSS('background-color','rgba(0, 0, 0, 0)');
-      await expect(locator).toHaveCSS('backdrop-filter','none');
-      await expect(locator).toHaveCSS('box-shadow','none');
-      assert.ok(await locator.evaluate(element=>{const style=getComputedStyle(element);return parseFloat(style.borderTopWidth)===0||style.borderTopColor==='rgba(0, 0, 0, 0)'}),`${surface} has no visible border`);
-      assert.equal(await locator.evaluate(element=>getComputedStyle(element).backgroundImage),'none',`${surface} has no background image`);
+    async function checkBarrier(bar, visible, surface) {
+      const pseudo=bar==='top'?'::before':'::after';
+      await expect(popup.locator('.app')).toHaveAttribute(`data-${bar}-bar-background`,String(visible));
+      const state=await popup.locator('.app').evaluate((app,pseudo)=>{
+        const style=getComputedStyle(app,pseudo),bounds=app.getBoundingClientRect();
+        const probe=document.createElement('span');probe.style.backgroundColor='var(--bg)';app.append(probe);
+        const expected=getComputedStyle(probe).backgroundColor;probe.remove();
+        return {background:style.backgroundColor,expected,filter:style.backdropFilter,image:style.backgroundImage,
+          content:style.content,display:style.display,visibility:style.visibility,opacity:Number(style.opacity),
+          width:parseFloat(style.width),height:parseFloat(style.height),top:parseFloat(style.top),bottom:parseFloat(style.bottom),
+          appWidth:bounds.width,topClearance:app.querySelector('.topbar').getBoundingClientRect().bottom-bounds.top,
+          bottomClearance:bounds.bottom-(app.querySelector('.tabbar')?.getBoundingClientRect().top??bounds.bottom)};
+      },pseudo);
+      const rendered=state.content!=='none'&&state.content!=='normal'&&state.display!=='none'&&state.visibility!=='hidden'&&state.opacity>0;
+      if(visible){
+        assert.ok(rendered,`${surface} renders a backing strip`);
+        assert.equal(state.opacity,1,`${surface} has full opacity`);
+        assert.equal(state.background,state.expected,`${surface} uses the opaque app background`);
+        assert.ok(!state.background.startsWith('rgba(')||state.background.endsWith(', 1)'),`${surface} is opaque`);
+        assert.ok(state.width>=state.appWidth-1,`${surface} spans the full popup width`);
+        assert.ok(state.height>=(bar==='top'?state.topClearance:state.bottomClearance)-1,`${surface} covers the bar and its outer margin`);
+        assert.equal(bar==='top'?state.top:state.bottom,0,`${surface} reaches the popup edge`);
+      }else{
+        assert.ok(!rendered||state.background==='rgba(0, 0, 0, 0)',`${surface} clears the backing strip`);
+      }
+      assert.equal(state.filter,'none',`${surface} is independent of Glass blur`);
+      assert.equal(state.image,'none',`${surface} has no backing image`);
+      return state;
+    }
+    async function chromePaint() {
+      return popup.locator('.topbar,.tabbar,.tabbar .tab').evaluateAll(elements=>elements.map(element=>{
+        const style=getComputedStyle(element);
+        return {background:style.backgroundColor,image:style.backgroundImage,filter:style.backdropFilter,shadow:style.boxShadow,border:style.borderColor};
+      }));
+    }
+    async function checkEditing(editing) {
+      await expect(popup.getByRole('button',{name:'Customize widgets',exact:true})).toHaveAttribute('aria-pressed',String(editing));
+      await expect(popup.getByRole('button',{name:'Add widgets',exact:true})).toHaveCount(editing?1:0);
+      await expect(popup.getByRole('button',{name:'Done editing',exact:true})).toHaveCount(editing?1:0);
+      await expect(popup.locator('.today-toolbar')).toHaveCount(editing?1:0);
+      if(!editing)await expect(popup.locator('.widget-controls,.widget-edit-note')).toHaveCount(0);
+    }
+    async function screenshotPixel(x,y) {
+      const png=await popup.screenshot({clip:{x:Math.floor(x),y:Math.floor(y),width:1,height:1},scale:'css',animations:'disabled'});
+      assert.equal(png.readUInt32BE(16),1);assert.equal(png.readUInt32BE(20),1);
+      assert.equal(png[24],8);assert.ok([2,6].includes(png[25]),'RGB screenshot pixel');
+      const chunks=[];
+      for(let offset=8;offset<png.length;){const length=png.readUInt32BE(offset),type=png.toString('ascii',offset+4,offset+8);if(type==='IDAT')chunks.push(png.subarray(offset+8,offset+8+length));offset+=length+12}
+      // This is the first pixel of the first row, so every PNG row filter has
+      // zero-valued left/up predictors and leaves its channels unchanged.
+      const row=inflateSync(Buffer.concat(chunks));
+      return [...row.subarray(1,4)];
+    }
+    async function checkContentUnderBars() {
+      for(const bar of ['top','bottom']){
+        const samples=[];
+        for(const visible of [false,true]){
+          await popupBackgrounds(bar==='top'&&visible,bar==='bottom'&&visible);
+          const barrier=await checkBarrier(bar,visible,`${bar} rendered backing`);
+          const card=popup.locator('[data-widget-id] .card')[bar==='top'?'first':'last']();
+          const original=await card.getAttribute('style');
+          const childStyles=await card.evaluate(element=>[...element.children].map(child=>child.getAttribute('style')));
+          try{
+            // Paint a real widget without changing its dimensions. The probe
+            // remains inside the actual scrolling content and stacking order.
+            await card.evaluate(element=>{
+              for(const [key,value] of Object.entries({background:'rgb(255, 0, 255)',backgroundImage:'none',borderRadius:'0',boxShadow:'none',backdropFilter:'none'}))element.style.setProperty(key.replace(/[A-Z]/g,letter=>`-${letter.toLowerCase()}`),value,'important');
+              for(const child of element.children)child.style.setProperty('visibility','hidden','important');
+            });
+            const position=await card.evaluate((element,bar)=>{
+              const app=document.querySelector('.app').getBoundingClientRect(),stage=document.querySelector('.stage'),before=element.getBoundingClientRect();
+              const wantedTop=bar==='top'?app.top-12:app.bottom-before.height+12;
+              stage.scrollTop+=before.top-wantedTop;
+              const bounds=element.getBoundingClientRect(),viewport=stage.getBoundingClientRect();
+              const x=Math.floor(bounds.left+bounds.width/2),y=Math.floor(bar==='top'?app.top+4:app.bottom-4);
+              return {x,y,top:bounds.top,bottom:bounds.bottom,stageTop:viewport.top,stageBottom:viewport.bottom,scrollTop:stage.scrollTop};
+            },bar);
+            assert.ok(position.scrollTop>0,`${bar} probe uses scrolled content`);
+            assert.ok(position.top<position.y&&position.bottom>position.y,`Actual widget passes behind the ${bar} bar`);
+            assert.ok(position.stageTop<=position.y&&position.stageBottom>position.y,`${bar} region belongs to the scroll viewport`);
+            assert.equal(await card.evaluate((element,{x,y})=>element.contains(document.elementFromPoint(x,y)),position),!visible,`${bar} backing also controls whether covered content receives pointer input`);
+            const pixel=await screenshotPixel(position.x,position.y);samples.push(pixel);
+            // Retained floating glass casts a subtle outer shadow even in the
+            // outer gap. Allow that paint while distinguishing opaque app fill
+            // from the bright marker beneath it.
+            if(visible){
+              const expected=barrier.expected.match(/[\d.]+/g).slice(0,3).map(Number);
+              assert.ok(pixel.every((channel,index)=>Math.abs(channel-expected[index])<=3),`${bar} strip visibly covers content with the app background: ${pixel}`);
+            }else assert.ok(pixel[0]>220&&pixel[1]<30&&pixel[2]>220,`Cleared ${bar} strip visibly reveals the scrolled widget: ${pixel}`);
+          }finally{
+            await card.evaluate((element,{original,childStyles})=>{
+              if(original===null)element.removeAttribute('style');else element.setAttribute('style',original);
+              [...element.children].forEach((child,index)=>{if(childStyles[index]===null)child.removeAttribute('style');else child.setAttribute('style',childStyles[index])});
+            },{original,childStyles});
+          }
+        }
+        assert.notDeepEqual(samples[0],samples[1],`${bar} switch changes actual content obstruction`);
+      }
+      await popupBackgrounds(true,false);
     }
     async function setSwitch(page, label, key, checked) {
       const control=page.getByRole('switch',{name:label,exact:true});
@@ -58,6 +152,7 @@ const { browserOptions, browserName } = require('./browser-fixture.cjs');
       await setSwitch(popup,'Bottom bar background','bottomBarBackground',bottom);
       await popup.getByRole('button',{name:'Back',exact:true}).click();
       await popup.locator('[data-widget-id="balance"] .card').waitFor();
+      await expect(popup.locator('.today-view')).toHaveCSS('opacity','1');
     }
     async function chromeGeometry() {
       return popup.locator('.topbar,.tabbar,.tabbar .tab,.stage').evaluateAll(elements=>elements.map(element=>{
@@ -85,6 +180,8 @@ const { browserOptions, browserName } = require('./browser-fixture.cjs');
       await checkBlur(popup.locator('.topbar'),pixels,'Today header');
       await checkBlur(popup.locator('[data-widget-id="balance"] .card'),pixels,'Today widget');
       await checkBlur(popup.locator('.tabbar .tab:not(.active)'),pixels,'Navigation button');
+      await checkBarrier('top',true,`Top backing at ${pixels}px blur`);
+      await checkBarrier('bottom',true,`Bottom backing at ${pixels}px blur`);
     }
     await worker.evaluate(async () => {
       const {settings} = await chrome.storage.sync.get('settings');
@@ -120,6 +217,7 @@ const { browserOptions, browserName } = require('./browser-fixture.cjs');
     await popup.getByRole('button',{name:'Preview every banner',exact:true}).click();
     for (const name of noticeNames) await popup.getByRole('button',{name:`Dismiss ${name} notification`,exact:true}).waitFor();
     assert.ok(await popup.locator('.topbar').evaluate(e=>e.scrollWidth<=e.clientWidth),'Developer toolbar fits with the new shortcut');
+    await expect.poll(()=>popup.locator('.notice').first().evaluate(element=>element.getBoundingClientRect().top>=document.querySelector('.topbar').getBoundingClientRect().bottom),{message:'Wrapped developer header leaves the first notice reachable'}).toBe(true);
     await popup.getByRole('button',{name:'Dismiss Bing app notification',exact:true}).click();
     assert.deepEqual(await worker.evaluate(()=>chrome.storage.local.get(['dismissedNotice:bingApp','dismissedNotice:restock','dismissedNotice:soldOut'])),liveAcknowledgements,'Preview dismissal does not change real acknowledgements');
     await popup.getByRole('button',{name:'Preview every banner',exact:true}).click();
@@ -149,8 +247,15 @@ const { browserOptions, browserName } = require('./browser-fixture.cjs');
     assert.equal(await streakWidget.locator('.streak-week').nth(1).locator('[data-state="pending"]').count(),1);
     assert.equal(await streakWidget.locator('.streak-week-days,.streak-week-note').count(),0,'Streak rails omit visual day numbers and the explanatory footer');
     assert.match(await streakWidget.getByRole('listitem').first().getAttribute('aria-label'),/Day 1: Completed/,'Segment meaning remains accessible');
-    await checkHiddenPanel(popup.locator('.topbar'),'Default header');
-    await checkHiddenPanel(popup.locator('.tabbar'),'Default navigation');
+    assert.ok(await streakWidget.locator('[data-state="completed"]').evaluateAll(segments=>segments.every(segment=>segment.textContent.trim()==='')),'Completed green segments have no check text');
+    await expect(popup.getByText('Your day',{exact:true})).toHaveCount(0);
+    await expect(popup.locator('.today-view time,.today-date')).toHaveCount(0);
+    const customize=popup.getByRole('button',{name:'Customize widgets',exact:true});
+    assert.equal((await customize.textContent()).trim(),'','Customize widgets is an icon-only toolbar button');
+    assert.ok(await customize.locator('svg').count()>0,'Customize widgets retains an icon');
+    await checkEditing(false);
+    await checkBarrier('top',false,'Default cleared top backing');
+    await checkBarrier('bottom',false,'Default cleared bottom backing');
     await expect(popup.locator('.today-view')).toHaveCSS('opacity','1');
     await expect(popup.locator('[data-widget-id="balance"] .hero-value')).toHaveText('250');
     await popup.screenshot({path:path.join(output,'redesigned-popup.png')});
@@ -158,6 +263,7 @@ const { browserOptions, browserName } = require('./browser-fixture.cjs');
     await expect(popup.getByRole('switch',{name:'Top bar background',exact:true})).toHaveAttribute('aria-checked','false');
     await expect(popup.getByRole('switch',{name:'Bottom bar background',exact:true})).toHaveAttribute('aria-checked','false');
     await setSwitch(popup,'Top bar background','topBarBackground',true);
+    await setSwitch(popup,'Bottom bar background','bottomBarBackground',true);
     await popup.getByRole('button',{name:'Back',exact:true}).click();
     for(const pixels of [0,8,30])await changeGlassBlur(pixels);
     const frosted=await popup.locator('[data-widget-id="balance"] .card').evaluate(element=>getComputedStyle(element).backgroundColor);
@@ -174,52 +280,84 @@ const { browserOptions, browserName } = require('./browser-fixture.cjs');
     assert.equal(dock.shadow,'none','Navigation has no full-width backing shadow');
     assert.ok(dock.height<=56,'Bottom navigation is more compact');
     const originalGeometry=await chromeGeometry();
+    const originalPaint=await chromePaint();
     await popupBackgrounds(false,true);
-    await checkHiddenPanel(popup.locator('.topbar'),'Hidden header with navigation background shown');
-    await checkBlur(popup.locator('.tabbar'),8,'Visible navigation background');
+    await checkBarrier('top',false,'Cleared top backing with bottom backing shown');
+    await checkBarrier('bottom',true,'Bottom backing remains shown');
+    assert.deepEqual(await chromePaint(),originalPaint,'Backing switches preserve the floating header and button glass');
     await popup.emulateMedia({contrast:'more'});
-    await checkHiddenPanel(popup.locator('.topbar'),'Contrast preference preserves hidden header');
-    await checkBlur(popup.locator('.tabbar'),0,'Contrast preference simplifies visible navigation');
+    await checkBarrier('top',false,'Contrast preference preserves cleared top backing');
+    await checkBarrier('bottom',true,'Contrast preference preserves opaque bottom backing');
+    await checkBlur(popup.locator('.topbar'),0,'Contrast preference simplifies floating header');
+    await checkBlur(popup.locator('.tabbar .tab:not(.active)'),0,'Contrast preference simplifies navigation buttons');
     await popup.emulateMedia({contrast:'no-preference'});
-    await checkBlur(popup.locator('.tabbar'),8,'Navigation blur resumes after contrast preference');
+    await checkBlur(popup.locator('.topbar'),8,'Header blur resumes after contrast preference');
+    await checkBlur(popup.locator('.tabbar .tab:not(.active)'),8,'Button blur resumes after contrast preference');
     assert.deepEqual(await chromeGeometry(),originalGeometry,'Background visibility preserves control and content geometry');
     await popup.getByRole('navigation').getByRole('button',{name:'Activity',exact:true}).click();
     await expect(popup.getByRole('navigation').getByRole('button',{name:'Activity',exact:true})).toHaveAttribute('aria-current','true');
-    await popup.getByRole('navigation').getByRole('button',{name:'Today',exact:true}).click();
+    await customize.click();
+    await expect(popup.getByRole('navigation').getByRole('button',{name:'Today',exact:true})).toHaveAttribute('aria-current','true');
+    await checkEditing(true);
+    await customize.click();
+    await checkEditing(false);
     await popup.reload();
-    await checkHiddenPanel(popup.locator('.topbar'),'Reopened hidden header');
-    await checkBlur(popup.locator('.tabbar'),8,'Reopened navigation background');
+    await checkBarrier('top',false,'Reopened cleared top backing');
+    await checkBarrier('bottom',true,'Reopened bottom backing');
+    await checkBlur(popup.locator('.topbar'),8,'Reopened floating header');
+    await checkBlur(popup.locator('.tabbar .tab:not(.active)'),8,'Reopened floating navigation buttons');
     await popup.getByRole('button',{name:'Settings',exact:true}).click();
     await expect(popup.getByRole('switch',{name:'Top bar background',exact:true})).toHaveAttribute('aria-checked','false');
     await expect(popup.getByRole('switch',{name:'Bottom bar background',exact:true})).toHaveAttribute('aria-checked','true');
     await setSwitch(popup,'Top bar background','topBarBackground',true);
     await popup.getByRole('button',{name:'Back',exact:true}).click();
-    await checkBlur(popup.locator('.topbar'),8,'Independently shown header');
-    await checkBlur(popup.locator('.tabbar'),8,'Navigation remains shown');
+    await checkBarrier('top',true,'Independently shown top backing');
+    await checkBarrier('bottom',true,'Bottom backing remains shown');
+    assert.deepEqual(await chromePaint(),originalPaint,'Showing both backings preserves floating glass');
     await expect(popup.locator('.today-view')).toHaveCSS('opacity','1');
     await popup.screenshot({path:path.join(output,'bar-backgrounds-visible.png')});
     await popupBackgrounds(true,false);
-    await checkBlur(popup.locator('.topbar'),8,'Header remains shown');
-    await checkHiddenPanel(popup.locator('.tabbar'),'Independently hidden navigation');
+    await checkBarrier('top',true,'Top backing remains shown');
+    await checkBarrier('bottom',false,'Independently cleared bottom backing');
+    assert.deepEqual(await chromePaint(),originalPaint,'Clearing bottom backing preserves floating glass');
     assert.deepEqual(await chromeGeometry(),originalGeometry,'Toggling backgrounds keeps the same layout');
+    await checkContentUnderBars();
     const stage=popup.locator('.stage');
     assert.equal(await stage.evaluate(element=>getComputedStyle(element).scrollbarWidth),'none','Popup scrollbar chrome is hidden');
     assert.ok(await stage.evaluate(element=>element.scrollHeight>element.clientHeight),'Today still has scrollable content');
+    await stage.evaluate(element=>{element.scrollTop=0});
+    assert.ok(await popup.locator('[data-widget-id]').first().evaluate(element=>element.getBoundingClientRect().top>=document.querySelector('.topbar').getBoundingClientRect().bottom),'First widget starts below the floating header');
+    await stage.evaluate(element=>{element.scrollTop=element.scrollHeight});
+    assert.ok(await popup.locator('[data-widget-id]').last().evaluate(element=>element.getBoundingClientRect().bottom<=document.querySelector('.tabbar').getBoundingClientRect().top),'Last widget can scroll fully above the floating navigation');
     await stage.evaluate(element=>{element.scrollTop=0});
     await stage.hover();
     await popup.mouse.wheel(0,180);
     await popup.waitForFunction(()=>document.querySelector('.stage').scrollTop>0);
     await stage.evaluate(element=>{element.scrollTop=0});
     await stage.focus();
+    await stage.evaluate(element=>{
+      window.__keyboardScrollEnd=new Promise(resolve=>element.addEventListener('scrollend',()=>resolve(true),{once:true}));
+    });
     await popup.keyboard.press('PageDown');
     await popup.waitForFunction(()=>document.querySelector('.stage').scrollTop>0);
     await stage.evaluate(element=>element.blur());
     await expect(popup.locator('.today-view')).toHaveCSS('opacity','1');
-    await stage.evaluate(element=>{element.scrollTop=0});
-    await popup.getByRole('button',{name:'Edit widgets',exact:true}).click();
+    await customize.click();
+    await checkEditing(true);
+    await popup.evaluate(()=>window.__keyboardScrollEnd);
+    assert.ok(await popup.locator('.today-toolbar').evaluate(element=>{
+      const rect=element.getBoundingClientRect(),app=document.querySelector('.app');
+      const expectedTop=app.getBoundingClientRect().top+parseFloat(getComputedStyle(app).getPropertyValue('--popup-top-clearance'));
+      return Math.abs(rect.top-expectedTop)<=1&&rect.top>=document.querySelector('.topbar').getBoundingClientRect().bottom&&rect.bottom<document.querySelector('.tabbar').getBoundingClientRect().top;
+    }),'Editor actions stay visible after native keyboard scrolling completes');
+    await popup.screenshot({path:path.join(output,'widget-edit-mode.png')});
     const lastWidgetAction=popup.locator('.widget-controls button:not([disabled])').last();
     await lastWidgetAction.focus();
     assert.ok(await lastWidgetAction.evaluate(element=>element.getBoundingClientRect().bottom<=document.querySelector('.tabbar').getBoundingClientRect().top),'Focused widget controls remain above the floating navigation');
+    const firstWidgetAction=popup.locator('.widget-controls button:not([disabled])').first();
+    await firstWidgetAction.focus();
+    assert.ok(await firstWidgetAction.evaluate(element=>element.getBoundingClientRect().top>=document.querySelector('.topbar').getBoundingClientRect().bottom),'Focused widget controls remain below the floating header');
+    assert.ok(await firstWidgetAction.evaluate(element=>element.getBoundingClientRect().top>=document.querySelector('.today-toolbar').getBoundingClientRect().bottom),'Focused widget controls remain below the editor actions');
     await popup.getByRole('combobox',{name:"Size of Today's streaks",exact:true}).selectOption('compact');
     await waitLayout(state=>state.popupWidgetLayout?.items.some(item=>item.id==='streaks'&&item.size==='compact'),'Popup widget size not saved');
     await popup.getByRole('button',{name:'Remove Points history',exact:true}).click();
@@ -227,6 +365,9 @@ const { browserOptions, browserName } = require('./browser-fixture.cjs');
     await popup.reload();
     await popup.locator('[data-widget-id="streaks"].popup-widget--compact').waitFor();
     assert.equal(await popup.locator('[data-widget-id="history"]').count(),0);
+    await checkEditing(false);
+    await customize.click();
+    await checkEditing(true);
     await popup.getByRole('button',{name:'Add widgets',exact:true}).click();
     const todayChooser=popup.getByRole('dialog',{name:'Today widgets',exact:true});
     await todayChooser.getByLabel('Points history',{exact:true}).check();
@@ -237,10 +378,17 @@ const { browserOptions, browserName } = require('./browser-fixture.cjs');
     await todayChooser.getByRole('button',{name:'Close',exact:true}).click();
     await waitLayout(state=>state.popupWidgetLayout?.items.length===0,'Explicit empty popup layout not saved');
     await popup.getByRole('heading',{name:'Make room for what matters'}).waitFor();
-    await popup.getByRole('button',{name:'Edit widgets',exact:true}).click();
+    await popup.getByRole('button',{name:'Done editing',exact:true}).click();
+    await checkEditing(false);
+    await popup.reload();
+    await popup.getByRole('heading',{name:'Make room for what matters'}).waitFor();
+    await checkEditing(false);
+    await customize.click();
+    await checkEditing(true);
     await popup.getByRole('button',{name:'Reset layout',exact:true}).click();
     await waitLayout(state=>!state.popupWidgetLayout,'Popup default layout not restored');
     await popup.getByRole('button',{name:'Done editing',exact:true}).click();
+    await checkEditing(false);
     await popup.getByRole('button',{name:'Settings',exact:true}).click();
     await popup.getByRole('heading',{name:'Backup and restore',exact:true}).waitFor();
     const downloadEvent=popup.waitForEvent('download');
@@ -284,8 +432,10 @@ const { browserOptions, browserName } = require('./browser-fixture.cjs');
     await popup.getByRole('heading',{name:'Backup and restore'}).scrollIntoViewIfNeeded();
     await popup.screenshot({path:path.join(output,'backup-settings.png')});
     await popup.getByRole('button',{name:'Back',exact:true}).click();
-    await checkHiddenPanel(popup.locator('.topbar'),'Restored hidden header');
-    await checkBlur(popup.locator('.tabbar'),8,'Restored navigation background');
+    await checkBarrier('top',false,'Restored cleared top backing');
+    await checkBarrier('bottom',true,'Restored bottom backing');
+    await checkBlur(popup.locator('.topbar'),8,'Restored floating header');
+    await checkBlur(popup.locator('.tabbar .tab:not(.active)'),8,'Restored floating navigation buttons');
     const finish=await context.newPage();
     finish.on('pageerror',error=>errors.push(error.message));
     await finish.addInitScript(()=>{const original=window.fetch.bind(window);window.fetch=(input,options)=>String(input).endsWith('/manifest.json')?Promise.resolve(new Response(JSON.stringify({version:'6.99.3'}),{status:200})):original(input,options)});
@@ -403,23 +553,29 @@ const { browserOptions, browserName } = require('./browser-fixture.cjs');
     await expect(finish.getByRole('switch',{name:'Top bar background',exact:true})).toHaveAttribute('aria-checked','false');
     await expect(finish.getByRole('switch',{name:'Bottom bar background',exact:true})).toHaveAttribute('aria-checked','true');
     await setSwitch(finish,'Bottom bar background','bottomBarBackground',false);
-    await checkHiddenPanel(popup.locator('.tabbar'),'Dashboard hides popup navigation background');
+    await checkBarrier('bottom',false,'Dashboard clears popup bottom backing');
     await setSwitch(finish,'Top bar background','topBarBackground',true);
-    await checkBlur(popup.locator('.topbar'),8,'Dashboard shows popup header background');
+    await checkBarrier('top',true,'Dashboard shows popup top backing');
+    await checkBlur(popup.locator('.topbar'),8,'Dashboard setting preserves floating header glass');
+    await checkBlur(popup.locator('.tabbar .tab:not(.active)'),8,'Dashboard setting preserves floating navigation glass');
     await setSwitch(finish,'Top bar background','topBarBackground',false);
     await setSwitch(finish,'Low power mode','lowPowerMode',true);
-    await checkHiddenPanel(popup.locator('.topbar'),'Low power preserves hidden header');
-    await checkHiddenPanel(popup.locator('.tabbar'),'Low power preserves hidden navigation');
+    await checkBarrier('top',false,'Low power preserves cleared top backing');
+    await checkBarrier('bottom',false,'Low power preserves cleared bottom backing');
+    await checkBlur(popup.locator('.topbar'),0,'Low-power floating header');
+    await checkBlur(popup.locator('.tabbar .tab:not(.active)'),0,'Low-power floating navigation buttons');
     await setSwitch(finish,'Top bar background','topBarBackground',true);
     await setSwitch(finish,'Bottom bar background','bottomBarBackground',true);
-    await checkBlur(popup.locator('.topbar'),0,'Low-power visible header');
-    await checkBlur(popup.locator('.tabbar'),0,'Low-power visible navigation');
+    await checkBarrier('top',true,'Low-power opaque top backing');
+    await checkBarrier('bottom',true,'Low-power opaque bottom backing');
     const opaqueSurface=await popup.locator('[data-widget-id="balance"] .card').evaluate(element=>getComputedStyle(element).backgroundColor);
     assert.notEqual(opaqueSurface,'rgba(0, 0, 0, 0)');
     await expect(popup.locator('.topbar')).toHaveCSS('background-color',opaqueSurface);
-    await expect(popup.locator('.tabbar')).toHaveCSS('background-color',opaqueSurface);
+    await expect(popup.locator('.tabbar .tab:not(.active)').first()).toHaveCSS('background-color',opaqueSurface);
+    await expect(popup.locator('.tabbar')).toHaveCSS('background-color','rgba(0, 0, 0, 0)');
     await setSwitch(finish,'Bottom bar background','bottomBarBackground',false);
-    await checkHiddenPanel(popup.locator('.tabbar'),'Low-power navigation can be hidden independently');
+    await checkBarrier('bottom',false,'Low-power bottom backing clears independently');
+    await checkBarrier('top',true,'Low-power top backing remains shown');
     await finish.getByRole('button',{name:'Settings',exact:true}).click();
     await finish.locator('.cursor-glow--rest').waitFor();
     await checkBlur(finish.locator('.dash-panel'),0,'Low-power dashboard widget');
@@ -452,7 +608,7 @@ const { browserOptions, browserName } = require('./browser-fixture.cjs');
     await finish.getByRole('button',{name:'Run the routine',exact:true}).click();
     await finish.locator('.action-feedback').filter({hasText:'current activity'}).waitFor();
     assert.deepEqual(errors,[]);
-    console.log(JSON.stringify({passed:true,browser:browserName(),version:JSON.parse(fs.readFileSync(path.join(build,'manifest.json'),'utf8')).version,popupWidgetsAddRemoveResize:true,dashboardWidgetsAddRemoveResize:true,emptyLayoutAndReset:true,sevenSegmentEvidence:true,sharedHistory:true,glassBlurRealSlider:true,compactTransparentDock:true,hiddenScrollbarsRetainScrolling:true,compactDismissibleNotices:true,dismissalsSurviveReopen:true,newNewsAndUpdateReappear:true,previewIsolated:true,rewardsLinksOnAllThreeSurfaces:true,narrowFinishActions:true,backupRoundtrip:true,ordersExcludedByDefault:true,mergePreservesCurrent:true,recoveryBackup:true,oneFinishBackground:true,finishFocusTrap:true,liveLowPower:true,liveTheme:true,reducedMotion:true,hiddenMotionPaused:true,storageErrorRetry:true,commandErrorsVisible:true,output}));
+    console.log(JSON.stringify({passed:true,browser:browserName(),version:JSON.parse(fs.readFileSync(path.join(build,'manifest.json'),'utf8')).version,popupWidgetsAddRemoveResize:true,dashboardWidgetsAddRemoveResize:true,emptyLayoutAndReset:true,toolbarWidgetEditing:true,sevenSegmentEvidence:true,completedSegmentsOmitChecks:true,sharedHistory:true,glassBlurRealSlider:true,independentFullWidthBarriers:true,renderedContentUnderBothBars:true,floatingGlassPreserved:true,compactTransparentDock:true,hiddenScrollbarsRetainScrolling:true,compactDismissibleNotices:true,dismissalsSurviveReopen:true,newNewsAndUpdateReappear:true,previewIsolated:true,rewardsLinksOnAllThreeSurfaces:true,narrowFinishActions:true,backupRoundtrip:true,ordersExcludedByDefault:true,mergePreservesCurrent:true,recoveryBackup:true,oneFinishBackground:true,finishFocusTrap:true,liveLowPower:true,liveTheme:true,reducedMotion:true,hiddenMotionPaused:true,storageErrorRetry:true,commandErrorsVisible:true,output}));
   } finally {
     if(context)await context.close();
     if(!path.resolve(profile).startsWith(path.resolve(os.tmpdir())+path.sep)||!path.basename(profile).startsWith('gingerbread-ui-check-'))throw Error('Unsafe cleanup path');

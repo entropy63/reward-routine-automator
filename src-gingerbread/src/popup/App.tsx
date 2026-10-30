@@ -1,4 +1,4 @@
-import { lazy, Suspense, useEffect, useRef, useState } from 'react'
+import { lazy, Suspense, useEffect, useLayoutEffect, useRef, useState } from 'react'
 import type { ComponentType, SVGProps } from 'react'
 import { AnimatePresence } from 'framer-motion'
 import { getSettings, DEFAULT_SETTINGS } from '../shared/settings.ts'
@@ -34,6 +34,7 @@ import {
   PlayIcon,
   RedoIcon,
   RefreshIcon,
+  WidgetEditIcon,
 } from './components/icons.tsx'
 
 type Tab = 'today' | 'runNow' | 'redeem' | 'activity'
@@ -75,6 +76,18 @@ export function App() {
 
   const [tab, setTab] = useState<Tab>('today')
   const [settingsOpen, setSettingsOpen] = useState(false)
+  const [widgetEditing, setWidgetEditing] = useState(false)
+  const headerRef = useRef<HTMLElement>(null)
+  useLayoutEffect(() => {
+    const header = headerRef.current
+    if (!header || !loaded) return
+    const app = header.closest<HTMLElement>('.app')
+    const measure = () => app?.style.setProperty('--popup-top-clearance', `${Math.ceil(header.getBoundingClientRect().height) + 24}px`)
+    measure()
+    const observer = new ResizeObserver(measure)
+    observer.observe(header)
+    return () => observer.disconnect()
+  }, [loaded])
   // The Developer Option "preview every banner": local state only — the sample
   // payloads live in the component (src-donut's testNotificationsBtn was DOM-only
   // the same way), so the preview vanishes on the next popup open.
@@ -105,7 +118,9 @@ export function App() {
   const visibleTabs = slotMissingDefaults(settings.sectionOrder, DEFAULT_SETTINGS.sectionOrder).filter(
     (id) => !settings.hiddenSections.includes(id),
   ) as Tab[]
-  const activeTab = visibleTabs.includes(tab) ? tab : visibleTabs[0] || 'today'
+  // The toolbar can open the board editor even when Today is hidden from the
+  // navigation. Closing the editor restores the saved tab visibility.
+  const activeTab = widgetEditing && !settingsOpen ? 'today' : visibleTabs.includes(tab) ? tab : visibleTabs[0] || 'today'
 
   // Withhold the UI until the stored settings arrive: rendering from the
   // defaults first meant a visible flash when they differ (the glass tint's
@@ -116,10 +131,11 @@ export function App() {
 
   return (
     <div className="app" style={{ height }} data-low-power={settings.lowPowerMode || undefined}
-      data-top-bar-background={settings.topBarBackground} data-bottom-bar-background={settings.bottomBarBackground}>
+      data-top-bar-background={settings.topBarBackground} data-bottom-bar-background={settings.bottomBarBackground}
+      data-widget-editing={widgetEditing}>
       <Background style={settings.background} animate={motionOn} />
 
-      <header className="topbar">
+      <header className="topbar" ref={headerRef}>
         <div className="brand">
           {/* data-no-escape on Back: the way OUT of Settings must stay
            * clickable while the troll is on, same as the gear that leads in. */}
@@ -167,11 +183,29 @@ export function App() {
             <RefreshIcon />
           </button>
           {!settingsOpen && (
+            <button
+              type="button"
+              className={`icon-btn${widgetEditing ? ' icon-btn--on' : ''}`}
+              onClick={() => {
+                setTab('today')
+                setWidgetEditing(activeTab !== 'today' || !widgetEditing)
+              }}
+              aria-label="Customize widgets"
+              aria-pressed={widgetEditing}
+              title="Customize widgets"
+            >
+              <WidgetEditIcon aria-hidden="true" />
+            </button>
+          )}
+          {!settingsOpen && (
             /* data-no-escape: the gear never dodges — it's the way into
              * Settings, where the troll feature lives (user request). */
             <button
               className="icon-btn"
-              onClick={() => setSettingsOpen(true)}
+              onClick={() => {
+                setWidgetEditing(false)
+                setSettingsOpen(true)
+              }}
               aria-label="Settings"
               title="Settings"
               data-no-escape
@@ -237,7 +271,8 @@ export function App() {
           {settingsOpen ? (
             <Settings key="settings" settings={settings} save={save} motionOn={motionOn} />
           ) : activeTab === 'today' ? (
-            <Today key="today" settings={settings} stats={stats} history={history} motionOn={motionOn} />
+            <Today key="today" settings={settings} stats={stats} history={history} motionOn={motionOn}
+              editing={widgetEditing} onEditingChange={setWidgetEditing} />
           ) : activeTab === 'runNow' ? (
             <Run key="run" settings={settings} save={save} runState={runState} send={send} busy={busy} motionOn={motionOn} />
           ) : activeTab === 'redeem' ? (
@@ -255,7 +290,10 @@ export function App() {
             <button
               key={id}
               className={`tab${activeTab === id ? ' active' : ''}`}
-              onClick={() => setTab(id)}
+              onClick={() => {
+                setWidgetEditing(false)
+                setTab(id)
+              }}
               aria-current={activeTab === id}
             >
               <span className="tab-icon">

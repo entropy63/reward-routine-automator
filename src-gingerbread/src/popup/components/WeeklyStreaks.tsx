@@ -14,7 +14,7 @@ export function WeeklyStreaks({ stats, compact = false }: { stats: Stats | null;
         <div className="streak-week" role="list" aria-label={`${label}: seven days`} title={value || 'Refresh to read this activity'}>
           {week.days.map(day => <span key={day.label} role="listitem" className={`streak-week-segment${day.current ? ' streak-week-segment--current' : ''}`}
             data-state={day.state} aria-current={day.current ? 'date' : undefined} aria-label={`${day.label}: ${STATUS[day.state]}`} title={`${day.label}: ${STATUS[day.state]}`}>
-            <span className="streak-week-mark" aria-hidden="true">{day.state === 'completed' ? '✓' : day.state === 'pending' ? '•' : day.state === 'unknown' ? '–' : ''}</span>
+            <span className="streak-week-mark" aria-hidden="true">{day.state === 'pending' ? '•' : day.state === 'unknown' ? '–' : ''}</span>
           </span>)}
         </div>
       </div>

@@ -1,4 +1,3 @@
-import { useState } from 'react'
 import { motion } from 'framer-motion'
 import type { ReactNode } from 'react'
 import type { Settings, StepId } from '../../shared/settings.ts'
@@ -21,10 +20,10 @@ import { usePopupWidgets } from '../hooks/usePopupWidgets.ts'
 import { moveWidget, resizeWidget, WIDGETS } from '../lib/widget-layout.ts'
 import type { WidgetId, WidgetSize } from '../lib/widget-layout.ts'
 
-export function Today({ settings, stats, history, motionOn }: {
+export function Today({ settings, stats, history, motionOn, editing, onEditingChange }: {
   settings: Settings; stats: Stats | null; history: HistoryEntry[]; motionOn: boolean
+  editing: boolean; onEditingChange: (editing: boolean) => void
 }) {
-  const [editing, setEditing] = useState(false)
   const layout = usePopupWidgets(settings.redeemGoalPts > 0)
   const available = parsePoints(stats?.availablePoints)
   const shown = useCountUp(available, motionOn)
@@ -72,17 +71,17 @@ export function Today({ settings, stats, history, motionOn }: {
   }
 
   return <motion.div className="view today-view" variants={viewVariants} initial="initial" animate="enter" exit="exit">
-    <div className="today-toolbar"><div><h1>Your day</h1><span>{new Date().toLocaleDateString(undefined, { weekday: 'short', month: 'short', day: 'numeric' })}</span></div>
-      <div className="today-tools"><button type="button" className={`btn btn--sm${editing ? ' btn--primary' : ''}`} disabled={!layout.writable} aria-pressed={editing} onClick={() => setEditing(value => !value)}>{editing ? 'Done editing' : 'Edit widgets'}</button>{chooser}</div>
-    </div>
+    {editing && <div className="today-toolbar"><h1>Edit widgets</h1>
+      <div className="today-tools"><button type="button" className="btn btn--sm btn--primary" onClick={() => onEditingChange(false)}>Done editing</button>{chooser}</div>
+    </div>}
     {layout.error && <div className="widget-layout-error" role="status">{layout.error}<button className="activity-action" onClick={layout.retry}>Retry layout</button></div>}
-    {editing && <div className="widget-edit-note"><span>Choose a size. Move or hide any widget.</span><button type="button" className="activity-action" onClick={() => void layout.reset()}>Reset layout</button></div>}
+    {editing && <div className="widget-edit-note"><span>Choose a size. Move or hide any widget.</span><button type="button" className="activity-action" disabled={!layout.writable} onClick={() => void layout.reset()}>Reset layout</button></div>}
     {!layout.loaded && !layout.error ? <p className="muted small" role="status">Loading widgets…</p> : <div className="today-widget-grid">
-      {layout.items.map((widget, index) => <PopupWidget key={widget.id} widget={widget} editing={editing} first={index === 0} last={index === layout.items.length - 1}
+      {layout.items.map((widget, index) => <PopupWidget key={widget.id} widget={widget} editing={editing && layout.writable} first={index === 0} last={index === layout.items.length - 1}
         resize={size => void layout.save(resizeWidget(layout.items, widget.id, size))}
         move={direction => void layout.save(moveWidget(layout.items, widget.id, direction))}
         remove={() => toggle(widget.id, false)}>{content(widget.id, widget.size)}</PopupWidget>)}
     </div>}
-    {layout.loaded && layout.items.length === 0 && <div className="widgets-empty"><h2>Make room for what matters</h2><p>Use Add widgets to start your own view of the day.</p></div>}
+    {layout.loaded && layout.items.length === 0 && <div className="widgets-empty"><h2>Make room for what matters</h2><p>{editing ? 'Use Add widgets to start your own view of the day.' : 'Choose Customize widgets in the toolbar to start your own view of the day.'}</p></div>}
   </motion.div>
 }
