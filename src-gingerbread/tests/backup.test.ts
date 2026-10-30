@@ -2,6 +2,7 @@ import test from 'node:test'
 import assert from 'node:assert/strict'
 import { createBackup, mergedBackupData, parseBackup, restoreBackup, RESTORE_BACKUP_KEY, validateBackupSettings } from '../src/shared/backup.ts'
 import { DEFAULT_SETTINGS } from '../src/shared/settings.ts'
+import { normalizeSettings } from '../src/shared/settings-validation.ts'
 
 const history = [{ day: '2026-10-28', first: 100, last: 200, at: 20 }]
 const run = { id: 'one', source: 'manual', startedAt: 10, endedAt: 20, status: 'completed', steps: ['search'], events: [{ at: 11, step: 'search', outcome: 'started', detail: '' }] }
@@ -22,6 +23,27 @@ test('backup rejects unsupported schemas, transient data, invalid settings and m
   }
   assert.throws(() => parseBackup(JSON.stringify({ ...base, data: JSON.parse('{"dashLayout":{"v":2,"items":[],"__proto__":{}}}') })), /unsupported object/)
   assert.throws(() => validateBackupSettings({ minDelaySec: 20, maxDelaySec: 10 }), /maximum search delay/)
+})
+
+test('backups preserve navigation backgrounds while older backups remain readable', () => {
+  const backup = createBackup({ ...DEFAULT_SETTINGS, topBarBackground: true, bottomBarBackground: true }, {}, '6.11.0')
+  const parsed = parseBackup(JSON.stringify(backup))
+  assert.equal(parsed.settings.topBarBackground, true)
+  assert.equal(parsed.settings.bottomBarBackground, true)
+  const legacySettings = { ...backup.settings }
+  delete legacySettings.topBarBackground
+  delete legacySettings.bottomBarBackground
+  const legacy = parseBackup(JSON.stringify({ ...backup, settings: legacySettings }))
+  assert.equal(Object.hasOwn(legacy.settings, 'topBarBackground'), false)
+  assert.equal(Object.hasOwn(legacy.settings, 'bottomBarBackground'), false)
+  const normalized = normalizeSettings(legacy.settings, DEFAULT_SETTINGS)
+  assert.equal(normalized.topBarBackground, false)
+  assert.equal(normalized.bottomBarBackground, false)
+  for (const key of ['topBarBackground', 'bottomBarBackground']) {
+    for (const value of ['false', 0, null]) {
+      assert.throws(() => parseBackup(JSON.stringify({ ...backup, settings: { ...backup.settings, [key]: value } })), new RegExp(`Invalid setting: ${key}`))
+    }
+  }
 })
 
 test('backup roundtrips editable widget choices and validates their shared schemas', () => {

@@ -21,3 +21,31 @@ test('strict validation rejects invalid patches, unknown steps and reversed paci
   const normalized = normalizeSettings({ minDelaySec: 30, maxDelaySec: 10 }, DEFAULT_SETTINGS)
   assert.ok(normalized.maxDelaySec >= normalized.minDelaySec)
 })
+
+test('navigation backgrounds default clear for legacy settings and retain independent saved choices', () => {
+  const legacy = normalizeSettings({ theme: 'nord', tileBlur: 8 }, DEFAULT_SETTINGS)
+  assert.equal(legacy.topBarBackground, false)
+  assert.equal(legacy.bottomBarBackground, false)
+  assert.equal(legacy.tileBlur, 8)
+  for (const topBarBackground of [false, true]) {
+    for (const bottomBarBackground of [false, true]) {
+      const choices = { topBarBackground, bottomBarBackground }
+      assert.deepEqual(validateSettings(choices, DEFAULT_SETTINGS), choices)
+      const normalized = normalizeSettings(choices, DEFAULT_SETTINGS)
+      assert.equal(normalized.topBarBackground, topBarBackground)
+      assert.equal(normalized.bottomBarBackground, bottomBarBackground)
+    }
+  }
+})
+
+test('navigation backgrounds require booleans for writes and recover malformed saved fields individually', () => {
+  for (const key of ['topBarBackground', 'bottomBarBackground'] as const) {
+    for (const value of ['false', 'true', 0, 1, null, [], {}]) {
+      assert.throws(() => validateSettings({ [key]: value }, DEFAULT_SETTINGS), new RegExp(`Invalid setting: ${key}`))
+      const other = key === 'topBarBackground' ? 'bottomBarBackground' : 'topBarBackground'
+      const normalized = normalizeSettings({ [key]: value, [other]: true }, DEFAULT_SETTINGS)
+      assert.equal(normalized[key], false)
+      assert.equal(normalized[other], true)
+    }
+  }
+})

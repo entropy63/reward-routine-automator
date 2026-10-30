@@ -115,7 +115,8 @@ export function App() {
   if (!loaded) return <StorageGate error={error} retry={retry} />
 
   return (
-    <div className="app" style={{ height }} data-low-power={settings.lowPowerMode || undefined}>
+    <div className="app" style={{ height }} data-low-power={settings.lowPowerMode || undefined}
+      data-top-bar-background={settings.topBarBackground} data-bottom-bar-background={settings.bottomBarBackground}>
       <Background style={settings.background} animate={motionOn} />
 
       <header className="topbar">

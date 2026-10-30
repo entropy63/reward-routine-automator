@@ -111,6 +111,8 @@ export interface Settings {
   background: BackgroundStyle // Popup backdrop style
   backgroundBrightness: number // Backdrop brightness, in % (100 = as drawn)
   tileBlur: number // Glass blur of the cards over the backdrop, in px
+  topBarBackground: boolean // Show the top navigation's shared glass background
+  bottomBarBackground: boolean // Show the bottom navigation's shared glass background
   accentColor: string // Explicit brand color overriding the theme's ("" = theme)
   appearance: Appearance // light/dark/auto
   refreshStatsOnPopupOpen: boolean // Re-read stats on popup open
@@ -179,6 +181,8 @@ export const DEFAULT_SETTINGS: Settings = {
   background: 'cursor',
   backgroundBrightness: 100,
   tileBlur: 0,
+  topBarBackground: false,
+  bottomBarBackground: false,
   accentColor: '#8b5cf6',
   appearance: 'auto',
   refreshStatsOnPopupOpen: false,

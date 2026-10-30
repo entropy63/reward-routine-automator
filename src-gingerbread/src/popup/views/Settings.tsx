@@ -200,6 +200,12 @@ export function Settings({
             onCommit={(n) => save({ tileBlur: n })}
           />
         </Row>
+        <Row label="Top bar background" hint="Show a glass panel behind the header">
+          <Switch checked={settings.topBarBackground} onChange={(v) => toggle('topBarBackground', v)} label="Top bar background" />
+        </Row>
+        <Row label="Bottom bar background" hint="Show a glass panel behind the navigation buttons">
+          <Switch checked={settings.bottomBarBackground} onChange={(v) => toggle('bottomBarBackground', v)} label="Bottom bar background" />
+        </Row>
         <Row label="Accent" hint="Theme default, or pick a color">
           <div className="swatches">
             {ACCENTS.map((a) => (
